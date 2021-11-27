@@ -1,6 +1,9 @@
-include ../config.mk
+TOPDIR = $(realpath ../..)
+
+include $(TOPDIR)/quartus/build/common.mk
 
 SYN_FILES_REL = $(patsubst %, ../../%, $(SYN_FILES))
+SYN_FILES_REL += ../qsys/build/$(QSYS_SYSTEM)/synthesis/$(QSYS_SYSTEM).qip
 QSF_FILES_REL = $(patsubst %, ../../%, $(QSF_FILES))
 SDC_FILES_REL = $(patsubst %, ../../%, $(SDC_FILES))
 
@@ -11,22 +14,14 @@ ifdef REV
 BITSTREAM_FILE := ../rev/$(FPGA_TOP)_rev$(REV).sof
 endif
 
-ifeq ($(BOARD), DE1SoC)
-include ../build/board.de1soc.mk
-endif
-
-ifeq ($(BOARD), DE2-115)
-include ../build/board.de2-115.mk
-endif
-
 ###################################################################
 # Main Targets
 ###################################################################
 
 all: fpga
 
-quartus: $(FPGA_TOP).qpf
-	quartus $(FPGA_TOP).qpf
+quartus-edit: $(FPGA_TOP).qpf
+	quartus $(FPGA_TOP).qpf &
 
 fpga: $(FPGA_TOP).sof
 
@@ -36,8 +31,12 @@ ifeq ($(REMOTE_JTAG), 1)
 endif
 	$(QUARTUS_PGM) $(PGM_ARGS) --mode=jtag -o $(PROG_OP)
 
+console:
+	$(SYSTEM_CONSOLE) -cli --rc_script=../tcl/console.tcl
+
 clean:
-	rm -rf *.rpt *.summary *.smsg *.chg smart.log *.htm *.eqn *.pin *.sof *.pof *.qsf *.qpf *.jdi *.sld *.txt *.qws *.done *.cdf db incremental_db greybox_tmp reconfig_mif
+	rm -rf *.rpt *.summary *.smsg *.chg smart.log *.htm *.eqn *.pin *.sof *.pof *.qsf *.qpf *.jdi *.sld *.txt *.qws *.done *.cdf
+	rm -rf db incremental_db greybox_tmp reconfig_mif .qsys_edit
 
 map: smart.log $(FPGA_TOP).map.rpt
 fit: smart.log $(FPGA_TOP).fit.rpt
@@ -45,28 +44,7 @@ asm: smart.log $(FPGA_TOP).asm.rpt
 sta: smart.log $(FPGA_TOP).sta.rpt
 smart: smart.log
 
-.PHONY: all quartus fpga program clean map fit asm sta smart
-
-###################################################################
-# Executable Configuration
-###################################################################
-
-QUARTUS_MAP  = $(QUARTUS_PATH)quartus_map
-QUARTUS_FIT  = $(QUARTUS_PATH)quartus_fit
-QUARTUS_ASM  = $(QUARTUS_PATH)quartus_asm
-QUARTUS_STA  = $(QUARTUS_PATH)quartus_sta
-QUARTUS_SH   = $(QUARTUS_PATH)quartus_sh
-QUARTUS_PGM  = $(QUARTUS_PATH)quartus_pgm
-JTAGCONFIG   = $(QUARTUS_PATH)jtagconfig
-
-QUARTUS_ARGS = --no_banner
-
-MAP_ARGS = $(QUARTUS_ARGS) --family=$(FPGA_FAMILY)
-FIT_ARGS = $(QUARTUS_ARGS) --part=$(FPGA_DEVICE)
-ASM_ARGS = $(QUARTUS_ARGS) 
-STA_ARGS = $(QUARTUS_ARGS)
-SH_ARGS  = $(QUARTUS_ARGS)
-PGM_ARGS = $(QUARTUS_ARGS)
+.PHONY: all quartus-edit fpga program clean map fit asm sta smart
 
 ###################################################################
 # Target implementations
@@ -75,15 +53,19 @@ PGM_ARGS = $(QUARTUS_ARGS)
 STAMP = echo done >
 
 %.map.rpt: map.chg $(SYN_FILES_REL)
+	@echo "[QUARTUS_MAP] $@"
 	$(QUARTUS_MAP) $(MAP_ARGS) $(FPGA_TOP)
 
 %.fit.rpt: fit.chg %.map.rpt
+	@echo "[QUARTUS_FIT] $@"
 	$(QUARTUS_FIT) $(FIT_ARGS) $(FPGA_TOP)
 
 %.sta.rpt: sta.chg %.fit.rpt
+	@echo "[QUARTUS_STA] $@"
 	$(QUARTUS_STA) $(STA_ARGS) $(FPGA_TOP)
 
 %.asm.rpt: asm.chg %.sta.rpt
+	@echo "[QUARTUS_ASM] $@"
 	$(QUARTUS_ASM) $(ASM_ARGS) $(FPGA_TOP)
 	mkdir -p ../rev
 	EXT=sof; COUNT=1; \
@@ -105,6 +87,7 @@ smart.log: $(ASSIGNMENT_FILES)
 ###################################################################
 
 $(ASSIGNMENT_FILES): $(QSF_FILES_REL) $(SYN_FILES_REL)
+	@echo "[PROJ_INIT] $@"
 	rm -f $(FPGA_TOP).qsf
 	$(QUARTUS_SH) $(SH_ARGS) --prepare -f $(FPGA_FAMILY) -d $(FPGA_DEVICE) -t $(FPGA_TOP) $(FPGA_TOP)
 	echo >> $(FPGA_TOP).qsf

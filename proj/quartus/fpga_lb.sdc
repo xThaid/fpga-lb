@@ -64,12 +64,6 @@ set_false_path -to [get_ports HEX4[*]]
 set_false_path -to [get_ports HEX5[*]]
 set_false_path -to [get_ports HEX6[*]]
 set_false_path -to [get_ports HEX7[*]]
-set_false_path -to [get_ports LCD_DATA[*]]
-set_false_path -to [get_ports LCD_BLON[*]]
-set_false_path -to [get_ports LCD_RW[*]]
-set_false_path -to [get_ports LCD_EN[*]]
-set_false_path -to [get_ports LCD_RS[*]]
-set_false_path -to [get_ports LCD_ON[*]]
 
 #**************************************************************
 # Set Multicycle Path
