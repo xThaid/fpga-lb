@@ -1,0 +1,43 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Mon Nov 29 22:02:53 2021
+[*]
+[dumpfile] "/home/thaid/Documents/uni/fall21/fpga/fpga-tasks/proj/sim/cpp/arp_cache/waveform.vcd"
+[dumpfile_mtime] "Mon Nov 29 22:01:57 2021"
+[dumpfile_size] 14044
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-tasks/proj/sim/cpp/arp_cache/arp_cache.gtkw"
+[timestart] 79
+[size] 1920 1023
+[pos] 0 1
+*-4.153753 30 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.arp_cache.
+[sst_width] 382
+[signals_width] 260
+[sst_expanded] 1
+[sst_vpaned_height] 667
+@28
+TOP.clk
+[color] 1
+TOP.query_req_ready_o
+[color] 3
+TOP.query_req_valid_i
+@23
+[color] 2
+TOP.query_ip_i[31:0]
+@22
+TOP.query_mac_o[47:0]
+@28
+[color] 6
+TOP.query_resp_ready_i
+[color] 2
+TOP.query_resp_valid_o
+TOP.query_err_o
+@22
+TOP.write_ip_i[31:0]
+TOP.write_mac_i[47:0]
+@28
+TOP.write_valid_i
+#{TOP.arp_cache.valid_mem[0:9]} TOP.arp_cache.valid_mem[0] TOP.arp_cache.valid_mem[10] TOP.arp_cache.valid_mem[11] TOP.arp_cache.valid_mem[12] TOP.arp_cache.valid_mem[13] TOP.arp_cache.valid_mem[14] TOP.arp_cache.valid_mem[15] TOP.arp_cache.valid_mem[16] TOP.arp_cache.valid_mem[17] TOP.arp_cache.valid_mem[18] TOP.arp_cache.valid_mem[19] TOP.arp_cache.valid_mem[1] TOP.arp_cache.valid_mem[20] TOP.arp_cache.valid_mem[21] TOP.arp_cache.valid_mem[22] TOP.arp_cache.valid_mem[23] TOP.arp_cache.valid_mem[24] TOP.arp_cache.valid_mem[25] TOP.arp_cache.valid_mem[26] TOP.arp_cache.valid_mem[27] TOP.arp_cache.valid_mem[28] TOP.arp_cache.valid_mem[29] TOP.arp_cache.valid_mem[2] TOP.arp_cache.valid_mem[30] TOP.arp_cache.valid_mem[31] TOP.arp_cache.valid_mem[3] TOP.arp_cache.valid_mem[4] TOP.arp_cache.valid_mem[5] TOP.arp_cache.valid_mem[6] TOP.arp_cache.valid_mem[7] TOP.arp_cache.valid_mem[8] TOP.arp_cache.valid_mem[9]
+[pattern_trace] 1
+[pattern_trace] 0
