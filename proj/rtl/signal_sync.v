@@ -1,3 +1,6 @@
+`timescale 1ns / 1ps
+`default_nettype none
+
 module signal_sync #(
   parameter integer Width = 1,
   parameter integer Depth = 2

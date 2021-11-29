@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`default_nettype none
 
 module lb_dataplane (
   input  [31:0] rx_avalonst_data,
