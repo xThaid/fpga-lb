@@ -26,7 +26,7 @@ public:
     }
 
     virtual void start() {
-        m_core->clk = 0;
+        setclk(0);
         eval();
         dumpVariables(0);
         tick();
@@ -60,20 +60,14 @@ public:
     virtual void tick() {
         eval();
         dumpVariables((vluint64_t)(10 * m_tickcount + 1));
-        m_core->clk = 0;
+        setclk(0);
         eval();
         dumpVariables((vluint64_t)(10 * m_tickcount + 5));
-        m_core->clk = 1;
+        setclk(1);
         eval();
         dumpVariables((vluint64_t)(10 * m_tickcount + 10));
 
         m_tickcount++;
-    }
-
-    virtual void reset() {
-        m_core->rst = 1;
-        tick();
-        m_core->rst = 0;
     }
 
     void dumpVariables(vluint64_t time) {
@@ -81,6 +75,8 @@ public:
             m_trace->dump(time);
         }
     }
+
+    virtual void setclk(int val) = 0;
 
     unsigned long tickcount() {
         return m_tickcount;

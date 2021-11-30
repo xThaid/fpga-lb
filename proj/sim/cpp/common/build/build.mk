@@ -1,3 +1,7 @@
+ifneq ($(VERBOSE), 1)
+.SILENT:
+endif
+
 CXX := g++
 CXXFLAGS := -std=c++11 -Wall -Og -g -faligned-new -fcf-protection=none
 
@@ -37,9 +41,11 @@ $(EXECUTABLE): $(OBJS) $(VOBJS) $(VOBJDIR)/V$(MODULE)__ALL.a
 	$(CXX) $(FLAGS) $(INCS) $^ -o $@
 
 $(VOBJDIR)/%.o: .stamp.verilate
+	@echo "[CXX] $@"
 	make -C obj_dir -f V$(MODULE).mk $*.o
 
 $(OBJDIR)/%.o: %.cpp .stamp.verilate
+	@echo "[CXX] $< -> $@"
 	@mkdir -p $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(INCS) $< -c -o $@
 

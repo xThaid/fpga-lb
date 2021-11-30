@@ -6,6 +6,10 @@
 
 class ArpCacheTB : public TestBench<Varp_cache> {
 public:
+    void setclk(int val) {
+        m_core->clk = val;
+    }
+
     void sendQuery(uint32_t ip) {
         m_core->query_ip_i = ip;
         m_core->query_req_valid_i = 1;
