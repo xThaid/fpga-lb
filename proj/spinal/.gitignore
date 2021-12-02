@@ -1,0 +1,7 @@
+VexRiscv.local
+target
+project/target
+project/project
+
+/*.v
+/*.yaml
