@@ -53,7 +53,7 @@ module fpga_lb(
   output              ENET1_TX_EN
 );
 
-  wire sys_clk, clk125, clk25, clk2m5;
+  wire sys_clk, clk_125, clk_25, clk_2m5;
   wire tx_clk;
 
   wire pll_rst = ~KEY[3];

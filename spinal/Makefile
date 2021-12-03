@@ -1,4 +1,4 @@
-VEXRISCV_REPO = git@github.com:SpinalHDL/VexRiscv.git
+VEXRISCV_REPO = https://github.com/SpinalHDL/VexRiscv.git
 VEXRISCV_DIR = VexRiscv.local
 
 VEXRISCV_TOP = VexRiscvWithDebug
@@ -14,6 +14,7 @@ $(VEXRISCV_TOP).v: .stamp.vexriscv
 
 .stamp.vexriscv:
 	git clone $(VEXRISCV_REPO) $(VEXRISCV_DIR)
+	touch .stamp.vexriscv
 
 clean:
 	rm -rf $(VEXRISCV_TOP).v $(VEXRISCV_TOP).yaml

@@ -5,3 +5,4 @@ project/project
 
 /*.v
 /*.yaml
+/.stamp.*
