@@ -17,9 +17,11 @@ $(VEXRISCV_TOP).v: .stamp.vexriscv
 	touch .stamp.vexriscv
 
 clean:
-	rm -rf $(VEXRISCV_TOP).v $(VEXRISCV_TOP).yaml
 	rm -rf .stamp.*
 	rm -rf $(VEXRISCV_DIR) target project/target project/project
 
-.PHONY: all vexriscv-rtl vexriscv-repo clean
+distclean: clean
+	rm -rf $(VEXRISCV_TOP).v $(VEXRISCV_TOP).yaml
+
+.PHONY: all vexriscv-rtl vexriscv-repo clean distclean
 

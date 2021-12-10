@@ -3,6 +3,4 @@ target
 project/target
 project/project
 
-/*.v
-/*.yaml
 /.stamp.*
