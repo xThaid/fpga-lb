@@ -42,6 +42,12 @@ RUN rm -rf /tmp/riscv_toolchain
 
 RUN addgroup --gid $GROUP_ID user
 RUN adduser --disabled-password --gecos '' --uid $USER_ID --gid $GROUP_ID user
+
+# Hardcaml
+COPY install_hardcaml.sh /tmp/hardcaml/
+RUN cd /tmp/hardcaml && ./install_hardcaml.sh
+RUN rm -rf /tmp/hardcaml.sh
+
 USER user
 
 ENTRYPOINT bash
