@@ -5,15 +5,17 @@ package cpu
 import spinal.core._
 import spinal.lib._
 import spinal.lib.com.jtag.Jtag
+import spinal.lib.eda.altera.{InterruptReceiverTag, QSysify, ResetEmitterTag}
+import spinal.lib.bus.avalon.{AvalonMM, AvalonMMConfig}
 
 import vexriscv.plugin._
 import vexriscv.{plugin, VexRiscv, VexRiscvConfig}
 
-case class VexRiscvWithDebug() extends Component
+case class VexRiscvCpu() extends Component
 {
     val io = new Bundle {
-        val iBus                    = master(IBusSimpleBus(null))
-        val dBus                    = master(DBusSimpleBus())
+        val iBus                    = master(AvalonMM(IBusSimpleBus.getAvalonConfig()))
+        val dBus                    = master(AvalonMM(DBusSimpleBus.getAvalonConfig()))
         val timerInterrupt          = in(Bool)
         val externalInterrupt       = in(Bool)
         val jtag                    = slave(Jtag())
@@ -29,7 +31,7 @@ case class VexRiscvWithDebug() extends Component
             new IBusSimplePlugin(
                 resetVector             = 0x00000000l,
                 cmdForkOnSecondStage    = false,
-                cmdForkPersistence      = false,
+                cmdForkPersistence      = true,
                 prediction              = STATIC,
                 // Trap when an iBus access returns an error.
                 catchAccessFault        = true,    
@@ -97,7 +99,7 @@ case class VexRiscvWithDebug() extends Component
                 catchAddressMisaligned  = true
             ),
             new DebugPlugin(ClockDomain.current),
-            new YamlPlugin("VexRiscvWithDebug.yaml")
+            new YamlPlugin("cpu0.yaml")
         )
     )
 
@@ -106,8 +108,16 @@ case class VexRiscvWithDebug() extends Component
 
     // Map the busses of the cpu to external IO ports of this module.
     for(plugin <- cpu.plugins) plugin match{
-        case plugin : IBusSimplePlugin  =>  io.iBus               <> plugin.iBus
-        case plugin : DBusSimplePlugin  =>  io.dBus               <> plugin.dBus
+        case plugin : IBusSimplePlugin  =>  {
+                                                io.iBus <> plugin.iBus.toAvalon()
+                                                io.iBus.setName("iBusAvalon")
+                                                io.iBus.addTag(ClockDomainTag(ClockDomain.current))
+                                            }
+        case plugin : DBusSimplePlugin  =>  {
+                                                io.dBus <> plugin.dBus.toAvalon()
+                                                io.dBus.setName("dBusAvalon")
+                                                io.dBus.addTag(ClockDomainTag(ClockDomain.current))
+                                            }
         case plugin : CsrPlugin     => { 
                                             io.timerInterrupt     <> plugin.timerInterrupt
                                             io.externalInterrupt  <> plugin.externalInterrupt
@@ -120,14 +130,13 @@ case class VexRiscvWithDebug() extends Component
     
 }
 
-object VexRiscvWithDebug {
+object VexRiscvCpu {
     def main(args: Array[String]) {
-
-        val config = SpinalConfig(anonymSignalUniqueness = true)
-        config.generateVerilog({
-            val toplevel = new VexRiscvWithDebug()
+        val report = SpinalVerilog{
+            val toplevel = new VexRiscvCpu()
             toplevel
-        })
+        }
+        QSysify(report.toplevel)
     }
 }
 

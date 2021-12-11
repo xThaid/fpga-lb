@@ -4,3 +4,6 @@ project/target
 project/project
 
 /.stamp.*
+/*.v
+/*.yaml
+/*_hw.tcl
