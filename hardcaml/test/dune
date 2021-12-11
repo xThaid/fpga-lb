@@ -1,0 +1,11 @@
+(library 
+ (name lb_dataplane_test)
+ (inline_tests
+  (flags (-verbose)))
+ (libraries base expect_test_helpers_core.expect_test_helpers_base hardcaml
+  hardcaml_step_testbench hardcaml_waveterm
+  stdio lb_dataplane)
+ (preprocess 
+  (pps ppx_deriving_hardcaml ppx_jane ppx_expect)))
+
+(include_subdirs unqualified)

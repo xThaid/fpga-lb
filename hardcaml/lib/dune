@@ -1,0 +1,8 @@
+(library
+ (name lb_dataplane)
+ (public_name lb_dataplane)
+ (libraries base hardcaml)
+ (preprocess
+  (pps ppx_jane ppx_deriving_hardcaml)))
+
+(include_subdirs unqualified)
