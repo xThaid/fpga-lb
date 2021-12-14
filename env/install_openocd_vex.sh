@@ -9,3 +9,5 @@ cd openocd_riscv
 ./configure --prefix=/opt/openocd_vex --enable-ftdi --enable-dummy
 make -j $(nproc)
 make install
+
+echo 'export PATH=$PATH:/opt/openocd_vex/bin' >> /etc/bash.bashrc
