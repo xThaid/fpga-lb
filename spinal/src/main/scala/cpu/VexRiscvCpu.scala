@@ -63,7 +63,7 @@ case class VexRiscvCpu() extends Component
                     mbadaddrAccess      = CsrAccess.READ_ONLY,    // == mtvalAccess
                     mcycleAccess        = CsrAccess.NONE,
                     minstretAccess      = CsrAccess.NONE,
-                    ecallGen            = false,
+                    ecallGen            = true,
                     ebreakGen           = true,
                     wfiGenAsWait        = false,
                     ucycleAccess        = CsrAccess.READ_ONLY,
