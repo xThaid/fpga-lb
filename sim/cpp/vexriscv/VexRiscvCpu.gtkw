@@ -1,0 +1,81 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Sun Dec 12 18:35:38 2021
+[*]
+[dumpfile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/sim/cpp/vexriscv/waveform.vcd"
+[dumpfile_mtime] "Sun Dec 12 17:30:51 2021"
+[dumpfile_size] 271153631
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/sim/cpp/vexriscv/VexRiscvCpu.gtkw"
+[timestart] 1098380
+[size] 1920 1023
+[pos] -219 -1054
+*-3.000000 1098385 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.VexRiscvCpu.
+[treeopen] TOP.VexRiscvCpu.cpu.
+[sst_width] 525
+[signals_width] 398
+[sst_expanded] 1
+[sst_vpaned_height] 266
+@28
+TOP.clk
+TOP.reset
+@200
+-
+@22
+TOP.dBusAvalon_address[31:0]
+@28
+TOP.dBusAvalon_read
+TOP.dBusAvalon_write
+@c00022
+TOP.dBusAvalon_byteEnable[3:0]
+@28
+(0)TOP.dBusAvalon_byteEnable[3:0]
+(1)TOP.dBusAvalon_byteEnable[3:0]
+(2)TOP.dBusAvalon_byteEnable[3:0]
+(3)TOP.dBusAvalon_byteEnable[3:0]
+@1401200
+-group_end
+@22
+TOP.dBusAvalon_writeData[31:0]
+@200
+-
+@28
+TOP.dBusAvalon_readDataValid
+@22
+TOP.dBusAvalon_readData[31:0]
+@28
+TOP.dBusAvalon_response[1:0]
+TOP.dBusAvalon_waitRequestn
+@200
+-
+@22
+TOP.iBusAvalon_address[31:0]
+@28
+TOP.iBusAvalon_read
+@200
+-
+@28
+TOP.iBusAvalon_readDataValid
+@22
+TOP.iBusAvalon_readData[31:0]
+@28
+TOP.iBusAvalon_response[1:0]
+TOP.iBusAvalon_waitRequestn
+@200
+-
+@28
+TOP.io_externalInterrupt
+TOP.io_jtag_tck
+TOP.io_jtag_tdi
+TOP.io_jtag_tdo
+TOP.io_jtag_tms
+TOP.io_timerInterrupt
+@201
+-
+@22
+TOP.VexRiscvCpu.cpu.CsrPlugin_mepc[31:0]
+TOP.VexRiscvCpu.cpu.CsrPlugin_mtval[31:0]
+TOP.VexRiscvCpu.cpu.CsrPlugin_mcause_exceptionCode[3:0]
+[pattern_trace] 1
+[pattern_trace] 0

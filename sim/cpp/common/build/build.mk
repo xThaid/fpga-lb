@@ -4,6 +4,7 @@ endif
 
 CXX := g++
 CXXFLAGS := -std=c++11 -Wall -Og -g -faligned-new -fcf-protection=none
+FLAGS := 
 
 VERILATOR_ROOT := /usr/local/share/verilator
 VERILATOR := verilator
@@ -31,7 +32,7 @@ build: $(EXECUTABLE)
 
 waves: waveform.vcd
 	@echo "[GTKWAVE]"
-	gtkwave waveform.vcd $(MODULE).gtkw
+	gtkwave waveform.vcd $(MODULE).gtkw &
 
 waveform.vcd: $(EXECUTABLE)
 	@echo "[SIMULATION] $(MODULE)"
@@ -55,7 +56,8 @@ $(VOBJDIR)/V$(MODULE)__ALL.a: .stamp.verilate
 
 .stamp.verilate: $(VERILOG_SOURCES_ABS)
 	@echo "[VERILATOR] $(MODULE)"
-	verilator --trace -cc $^
+	verilator -Wno-WIDTH --trace -cc $^
+	sed -i '/#include "svdpi.h"/d' $(VOBJDIR)/V$(MODULE).h
 	@touch .stamp.verilate
 
 clean:
