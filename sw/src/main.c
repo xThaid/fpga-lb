@@ -5,8 +5,10 @@
 #define DELAY_LOOP 10000
 #define TRUE 1
 
-void printf(char *c) {
+char foo;
 
+void printf(char *c) {
+	foo = *c;
 }
 
 void task1 (void *pvParameters) {
@@ -29,7 +31,7 @@ void task2 (void *pvParameters) {
 
 	while(TRUE) {
 
-		printf("Task 2\n");
+		printf("task 2\n");
 
 		taskYIELD();
 
@@ -114,4 +116,9 @@ void handle_trap(void)
 {
 	while (1)
 		;
+}
+
+void vPortSetupTimerInterrupt(void)
+{
+
 }

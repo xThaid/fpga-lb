@@ -65,7 +65,11 @@ init_stack:
     li a0, 0
     li a1, 0
     li a2, 0
-    call main
+    j main
+
+end_main:
+    wfi
+    j end_main
 
     .cfi_endproc
 
