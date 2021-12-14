@@ -34,6 +34,12 @@ endif
 console:
 	$(SYSTEM_CONSOLE) -cli --rc_script=../tcl/console.tcl
 
+update_ram: sw
+	$(QUARTUS_CDB) $(CDB_ARGS) $(FPGA_TOP) --update_mif
+
+sw:
+	$(MAKE) -C ../../sw
+
 clean:
 	rm -rf *.rpt *.summary *.smsg *.chg smart.log *.htm *.eqn *.pin *.sof *.pof *.qsf *.qpf *.jdi *.sld *.txt *.qws *.done *.cdf
 	rm -rf db incremental_db greybox_tmp reconfig_mif .qsys_edit
@@ -44,7 +50,7 @@ asm: smart.log $(FPGA_TOP).asm.rpt
 sta: smart.log $(FPGA_TOP).sta.rpt
 smart: smart.log
 
-.PHONY: all quartus-edit fpga program clean map fit asm sta smart
+.PHONY: all quartus-edit fpga program clean map fit asm sta smart update_ram sw
 
 ###################################################################
 # Target implementations

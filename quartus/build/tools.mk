@@ -4,6 +4,7 @@ QUARTUS_ASM    = $(QUARTUS_PATH)bin/quartus_asm
 QUARTUS_STA    = $(QUARTUS_PATH)bin/quartus_sta
 QUARTUS_SH     = $(QUARTUS_PATH)bin/quartus_sh
 QUARTUS_PGM    = $(QUARTUS_PATH)bin/quartus_pgm
+QUARTUS_CDB    = $(QUARTUS_PATH)bin/quartus_cdb
 JTAGCONFIG     = $(QUARTUS_PATH)bin/jtagconfig
 SYSTEM_CONSOLE = $(QUARTUS_PATH)sopc_builder/bin/system-console
 QSYS_GEN       = $(QUARTUS_PATH)sopc_builder/bin/qsys-generate
@@ -17,4 +18,5 @@ ASM_ARGS  = $(QUARTUS_ARGS)
 STA_ARGS  = $(QUARTUS_ARGS)
 SH_ARGS   = $(QUARTUS_ARGS)
 PGM_ARGS  = $(QUARTUS_ARGS)
+CDB_ARGS  = $(QUARTUS_ARGS)
 QSYS_ARGS = --part=$(FPGA_DEVICE)
