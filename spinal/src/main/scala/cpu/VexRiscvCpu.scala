@@ -30,7 +30,7 @@ case class VexRiscvCpu() extends Component
         plugins = List(
             new IBusSimplePlugin(
                 resetVector             = 0x00000000l,
-                cmdForkOnSecondStage    = false,
+                cmdForkOnSecondStage    = true,
                 cmdForkPersistence      = true,
                 prediction              = STATIC,
                 // Trap when an iBus access returns an error.
