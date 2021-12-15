@@ -7,6 +7,7 @@ CC      := $(BINARY)-gcc
 OBJCOPY := $(BINARY)-objcopy
 OBJDUMP := $(BINARY)-objdump
 AR      := $(BINARY)-ar
+BIN2MIF := python3 ../tools/bin2mif.py
 
 MARCH := rv32ic
 MABI  := ilp32
@@ -67,7 +68,7 @@ PORT_ASM_OBJ = $(PORT_ASM:%.S=$(BUILD_DIR)/%.o)
 ASM_OBJ = $(ASMS:%.S=$(BUILD_DIR)/%.o)
 OBJS = $(ASM_OBJ) $(PORT_ASM_OBJ) $(PORT_OBJ) $(RTOS_OBJ) $(APP_OBJ)
 
-all: $(BUILD_DIR)/$(PROG).elf $(BUILD_DIR)/$(PROG).hex $(BUILD_DIR)/$(PROG).bin $(BUILD_DIR)/$(PROG).asm
+all: $(BUILD_DIR)/$(PROG).elf $(BUILD_DIR)/$(PROG).hex $(BUILD_DIR)/$(PROG).bin $(BUILD_DIR)/$(PROG).asm $(BUILD_DIR)/$(PROG).mif
 
 $(BUILD_DIR)/$(PROG).elf: $(OBJS) $(LDSCRIPT)
 	@echo "[LINK] $@"
@@ -84,6 +85,10 @@ $(BUILD_DIR)/$(PROG).elf: $(OBJS) $(LDSCRIPT)
 %.asm: %.elf
 	@echo "[OBJCOPY] $< -> $@"
 	$(OBJDUMP) -S -d $^ > $@
+
+%.mif: %.bin
+	@echo "[BIN2MIF] $< -> $@"
+	$(BIN2MIF) $< > $@
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(@D)

@@ -192,7 +192,7 @@
   <parameter name="enPRInitMode" value="false" />
   <parameter name="enableDiffWidth" value="false" />
   <parameter name="initMemContent" value="true" />
-  <parameter name="initializationFileName">/home/thaid/Documents/uni/fall21/fpga/fpga-lb/sw/build/fpga_lb.hex</parameter>
+  <parameter name="initializationFileName">../../sw/build/fpga_lb.mif</parameter>
   <parameter name="instanceID" value="NONE" />
   <parameter name="memorySize" value="65536" />
   <parameter name="readDuringWriteMode" value="DONT_CARE" />

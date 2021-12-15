@@ -36,6 +36,7 @@ console:
 
 update_ram: sw
 	$(QUARTUS_CDB) $(CDB_ARGS) $(FPGA_TOP) --update_mif
+	$(STAMP) asm.chg
 
 sw:
 	$(MAKE) -C ../../sw
@@ -73,6 +74,9 @@ STAMP = echo done >
 %.asm.rpt: asm.chg %.sta.rpt
 	@echo "[QUARTUS_ASM] $@"
 	$(QUARTUS_ASM) $(ASM_ARGS) $(FPGA_TOP)
+	if [ -f "$*_time_limited.sof" ]; then \
+		mv $*_time_limited.sof $*.sof; \
+	fi
 	mkdir -p ../rev
 	EXT=sof; COUNT=1; \
 	while [ -e ../rev/$*_rev$$COUNT.$$EXT ]; \
