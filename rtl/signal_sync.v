@@ -17,7 +17,7 @@ module signal_sync #(
   integer k;
 
   always @(posedge clk) begin
-    buffers[0] = sig;
+    buffers[0] <= sig;
     for (k = 1; k < Depth; k = k + 1) begin
       buffers[k] <= buffers[k - 1];
     end

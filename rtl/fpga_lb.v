@@ -64,8 +64,6 @@ module fpga_lb(
 
   assign tx_clk = clk_125;
 
-  assign sys_rst_n = !sys_rst;
-
   assign mdio0_in = ENET0_MDIO;
   assign ENET0_MDIO = mdio0_oen ? 1'bz : mdio0_out;
   
@@ -86,7 +84,7 @@ module fpga_lb(
   ) signal_sync_rst (
     .clk    (sys_clk),
     .sig    (pll_rst_locked),
-    .sigout (sys_rst),
+    .sigout (sys_rst_n),
   );
 
   lb_system u0 (
@@ -105,7 +103,7 @@ module fpga_lb(
     .mac_0_status_set_1000  (1'b0),
     .mac_0_status_eth_mode  (),
     .mac_0_status_ena_10    (),
-    .reset_reset_n          (sys_rst_n)
+    .reset_reset_n          (pll_rst_locked)
 );
 
 endmodule
