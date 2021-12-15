@@ -69,6 +69,20 @@ module fpga_lb(
   
   assign ENET0_GTX_CLK = tx_clk;
 
+  wire [63:0] cnto;
+
+  counter #(
+    .Width(64)
+  ) cnt (
+    .clk_i(sys_clk),
+    .rst_ni(1'b1),
+    .en_i(1'b1),
+    .zero_i(1'b0),
+    .cnt_o(cnto)
+  );
+
+  assign LEDR = cnto[42:25];
+
   pll pll_0 (
     .areset (pll_rst),
     .inclk0 (CLOCK_50),
@@ -105,5 +119,24 @@ module fpga_lb(
     .mac_0_status_ena_10    (),
     .reset_reset_n          (pll_rst_locked)
 );
+
+endmodule
+
+
+module counter #(
+  parameter integer Width = 64
+ )(
+  input                  clk_i,
+  input                  rst_ni,
+  input                  en_i,
+  input                  zero_i,
+  output reg [Width-1:0] cnt_o
+);
+
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) cnt_o <= 0;
+    else if (zero_i) cnt_o <= 0;
+    else if (en_i) cnt_o <= cnt_o + 1;
+  end
 
 endmodule
