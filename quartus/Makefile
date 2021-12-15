@@ -1,3 +1,7 @@
+TOPDIR = $(realpath ..)
+
+include $(TOPDIR)/quartus/build/common.mk
+
 all: fpga
 
 qsys:
