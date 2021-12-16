@@ -34,15 +34,21 @@ void task1 (void *pvParameters) {
 
 void task2 (void *pvParameters) {
     while(1) {
-        jtag_uart_printf("Timer: %d\n", xTaskGetTickCount());
 
         vTaskDelay(1000);
     }
 }
 
-int main(void)
-{
-    //xTaskCreate(task1, "Task 1", 100, NULL, 1, NULL);
+void heartBeatTask(void *pvParameters) {
+    while(1) {
+        gpio_led_toggle(GPIO_LEDG(8));
+
+        vTaskDelay(500);
+    }
+}
+
+int main(void) {
+    xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
     xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
     vTaskStartScheduler();
 
@@ -62,6 +68,7 @@ void vApplicationMallocFailedHook( void )
     to query the size of free heap space that remains (although it does not
     provide information on how the remaining heap might be fragmented). */
     taskDISABLE_INTERRUPTS();
+    gpio_led_write(GPIO_LEDR(17), 1);
     for( ;; );
 }
 /*-----------------------------------------------------------*/
@@ -89,6 +96,7 @@ void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
     configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
     function is called if a stack overflow is detected. */
     taskDISABLE_INTERRUPTS();
+    gpio_led_write(GPIO_LEDR(16), 1);
     for( ;; );
 }
 /*-----------------------------------------------------------*/
@@ -103,6 +111,7 @@ void vAssertCalled( void )
     volatile uint32_t ulSetTo1ToExitFunction = 0;
 
     taskDISABLE_INTERRUPTS();
+    gpio_led_write(GPIO_LEDR(15), 1);
     while( ulSetTo1ToExitFunction != 1 )
     {
         __asm volatile( "NOP" );
@@ -111,5 +120,6 @@ void vAssertCalled( void )
 
 void SystemIrqHandler(uint32_t mcause) 
 {
+    gpio_led_write(GPIO_LEDR(14), 1);
     //jtag_uart_printf("freeRTOS: Unknown interrupt (0x%x)\n", mcause);
 }

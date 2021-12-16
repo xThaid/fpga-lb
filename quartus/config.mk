@@ -19,7 +19,7 @@ SDC_FILES = quartus/fpga_lb.sdc
 
 # QSYS
 QSYS_SYSTEM := lb_system
-QSYS_COMPONENTS := lb_dataplane VexRiscvCpu riscv_mtime
+QSYS_COMPONENTS := lb_dataplane VexRiscvCpu riscv_mtime gpio_ctrl
 
 # Remote JTAG server
 REMOTE_JTAG ?= 0

@@ -8,6 +8,10 @@
 #define FIELD_MASK(field_start, field_len) \
     ( ((1<<(field_len))-1) << (field_start))
 
+//------------------------------------------------------------------------------
+// JTAG UART
+//------------------------------------------------------------------------------
+
 typedef struct __attribute__((packed,aligned(4))) {
 	uint32_t DATA;
 	uint32_t CTRL;
@@ -46,6 +50,20 @@ typedef struct __attribute__((packed,aligned(4))) {
 #define JTAG_UART_DATA_RAVAIL_LEN 16
 #define JTAG_UART_DATA_RAVAIL_MASK (FIELD_MASK(JTAG_UART_DATA_RAVAIL, JTAG_UART_DATA_RAVAIL_LEN))
 
+//------------------------------------------------------------------------------
+// GPIO
+//------------------------------------------------------------------------------
+
+typedef struct __attribute__((packed,aligned(4))) {
+	uint32_t LED;
+} gpio_t;
+
+#define GPIO (*((volatile gpio_t*) (0x80002000UL)))
+
+#define GPIO_LEDR(led) (1UL << led)
+#define GPIO_LEDG(led) ((1UL << led) << 18)
+
 #include "uart.h"
+#include "gpio.h"
 
 #endif

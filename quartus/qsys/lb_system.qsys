@@ -9,6 +9,22 @@
    categories="System" />
  <parameter name="bonusData"><![CDATA[bonusData 
 {
+   element gpio_ctrl
+   {
+      datum _sortIndex
+      {
+         value = "6";
+         type = "int";
+      }
+   }
+   element gpio_ctrl.avalon_slave
+   {
+      datum baseAddress
+      {
+         value = "2147491840";
+         type = "String";
+      }
+   }
    element jtag_master
    {
       datum _sortIndex
@@ -95,7 +111,9 @@
  <parameter name="useTestBenchNamingPattern" value="false" />
  <instanceScript></instanceScript>
  <interface name="clk" internal="sys_clk.clk_in" type="clock" dir="end" />
+ <interface name="gpio" internal="gpio_ctrl.gpio" type="conduit" dir="end" />
  <interface name="reset" internal="sys_clk.clk_in_reset" type="reset" dir="end" />
+ <module name="gpio_ctrl" kind="gpio_ctrl" version="1.0" enabled="1" />
  <module
    name="jtag_master"
    kind="altera_jtag_avalon_master"
@@ -191,6 +209,15 @@
    kind="avalon"
    version="20.1"
    start="vexriscv.dBusAvalon"
+   end="gpio_ctrl.avalon_slave">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80002000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="vexriscv.dBusAvalon"
    end="onchip_ram.s2">
   <parameter name="arbitrationPriority" value="1" />
   <parameter name="baseAddress" value="0x0000" />
@@ -217,11 +244,8 @@
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="jtag_master.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="vexriscv.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="jtag_uart.clk" />
- <connection
-   kind="clock"
-   version="20.1"
-   start="sys_clk.clk"
-   end="riscv_mtime.clk" />
+ <connection kind="clock" version="20.1" start="sys_clk.clk" end="riscv_mtime.clk" />
+ <connection kind="clock" version="20.1" start="sys_clk.clk" end="gpio_ctrl.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="onchip_ram.clk1" />
  <connection
    kind="conduit"
@@ -254,6 +278,11 @@
    version="20.1"
    start="sys_clk.clk_reset"
    end="riscv_mtime.reset" />
+ <connection
+   kind="reset"
+   version="20.1"
+   start="sys_clk.clk_reset"
+   end="gpio_ctrl.reset" />
  <connection
    kind="reset"
    version="20.1"
