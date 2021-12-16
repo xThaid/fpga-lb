@@ -22,6 +22,9 @@ quartus-edit: qsys
 console:
 	$(MAKE) -C project console
 
+update_ram:
+	$(MAKE) -C project update_ram
+
 clean:
 	$(MAKE) -C project clean
 	$(MAKE) -C qsys clean
@@ -29,4 +32,4 @@ clean:
 distclean: clean
 	rm -rf rev
 
-.PHONY: all qsys fpga build program quartus-edit console clean distclean
+.PHONY: all qsys fpga build program quartus-edit console clean distclean update_ram
