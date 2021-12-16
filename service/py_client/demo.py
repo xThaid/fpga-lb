@@ -28,7 +28,6 @@ print("cable warning   : ", ju.cable_warning())
 print("info            : ", ju.get_info())
 print("setup done      : ", ju.is_setup_done())
 
-ju.write(b'helloworld\n')
 time.sleep(1)
 print("bytes available : ", ju.bytes_available())
 print("read            : ", ju.read())

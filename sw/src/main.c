@@ -26,15 +26,15 @@ void task1 (void *pvParameters) {
             buf[n - i - 1] = c;
         }
 
-        jtag_uart_print("Reversed: ");
-        jtag_uart_print(buf);
+        jtag_uart_puts("Reversed: ");
+        jtag_uart_puts(buf);
         jtag_uart_putc('\n');
     }
 }
 
 void task2 (void *pvParameters) {
     while(1) {
-        jtag_uart_print("Hello there!\n");
+        jtag_uart_printf("Timer: %d\n", xTaskGetTickCount());
 
         vTaskDelay(1000);
     }
@@ -42,7 +42,6 @@ void task2 (void *pvParameters) {
 
 int main(void)
 {
-    jtag_uart_print("Starting FreeRTOS\n");
     //xTaskCreate(task1, "Task 1", 100, NULL, 1, NULL);
     xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
     vTaskStartScheduler();
