@@ -80,6 +80,7 @@ SECTIONS
 		. += _STACK_SIZE;
 		. = ALIGN(4);
 		__stack_top = .;
+		__freertos_irq_stack_top = .;
 	} >dmem
 
 	_end = .;
