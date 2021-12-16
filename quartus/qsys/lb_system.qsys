@@ -41,6 +41,22 @@
          type = "int";
       }
    }
+   element riscv_mtime
+   {
+      datum _sortIndex
+      {
+         value = "5";
+         type = "int";
+      }
+   }
+   element riscv_mtime.avalon_slave
+   {
+      datum baseAddress
+      {
+         value = "2147487744";
+         type = "String";
+      }
+   }
    element sys_clk
    {
       datum _sortIndex
@@ -145,6 +161,7 @@
   <parameter name="useShallowMemBlocks" value="false" />
   <parameter name="writable" value="true" />
  </module>
+ <module name="riscv_mtime" kind="riscv_mtime" version="1.0" enabled="1" />
  <module name="sys_clk" kind="clock_source" version="20.1" enabled="1">
   <parameter name="clockFrequency" value="50000000" />
   <parameter name="clockFrequencyKnown" value="true" />
@@ -159,6 +176,15 @@
    end="jtag_uart.avalon_jtag_slave">
   <parameter name="arbitrationPriority" value="1" />
   <parameter name="baseAddress" value="0x80000000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="vexriscv.dBusAvalon"
+   end="riscv_mtime.avalon_slave">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80001000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection
@@ -191,7 +217,23 @@
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="jtag_master.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="vexriscv.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="jtag_uart.clk" />
+ <connection
+   kind="clock"
+   version="20.1"
+   start="sys_clk.clk"
+   end="riscv_mtime.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="onchip_ram.clk1" />
+ <connection
+   kind="conduit"
+   version="20.1"
+   start="vexriscv.io_timerInterrupt"
+   end="riscv_mtime.irq">
+  <parameter name="endPort" value="" />
+  <parameter name="endPortLSB" value="0" />
+  <parameter name="startPort" value="" />
+  <parameter name="startPortLSB" value="0" />
+  <parameter name="width" value="0" />
+ </connection>
  <connection
    kind="reset"
    version="20.1"
@@ -207,6 +249,11 @@
    version="20.1"
    start="sys_clk.clk_reset"
    end="jtag_uart.reset" />
+ <connection
+   kind="reset"
+   version="20.1"
+   start="sys_clk.clk_reset"
+   end="riscv_mtime.reset" />
  <connection
    kind="reset"
    version="20.1"

@@ -52,7 +52,7 @@ case class VexRiscvCpu() extends Component
                     mvendorid           = null,
                     marchid             = null,
                     mimpid              = null,
-                    mhartid             = null,
+                    mhartid             = 0,
                     misaExtensionsInit  = 66,
                     misaAccess          = CsrAccess.NONE,
                     mtvecAccess         = CsrAccess.NONE,

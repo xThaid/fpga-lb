@@ -34,19 +34,16 @@ void task1 (void *pvParameters) {
 
 void task2 (void *pvParameters) {
     while(1) {
-        jtag_uart_print("Task 2\n");
+        jtag_uart_print("Hello there!\n");
 
-        taskYIELD();
-
-        for(int i = 0; i < DELAY_LOOP; i++)
-            portNOP();
+        vTaskDelay(1000);
     }
 }
 
 int main(void)
 {
     jtag_uart_print("Starting FreeRTOS\n");
-    xTaskCreate(task1, "Task 1", 100, NULL, 1, NULL);
+    //xTaskCreate(task1, "Task 1", 100, NULL, 1, NULL);
     xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
     vTaskStartScheduler();
 
@@ -116,9 +113,4 @@ void vAssertCalled( void )
 void SystemIrqHandler(uint32_t mcause) 
 {
     //jtag_uart_printf("freeRTOS: Unknown interrupt (0x%x)\n", mcause);
-}
-
-void vPortSetupTimerInterrupt(void)
-{
-
 }

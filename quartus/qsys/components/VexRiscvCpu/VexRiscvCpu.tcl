@@ -99,13 +99,13 @@ add_interface_port dBusAvalon dBusAvalon_readData readdata Input 32
 # connection point io_timerInterrupt
 #
 add_interface io_timerInterrupt conduit end
-set_interface_property io_timerInterrupt associatedClock ""
+set_interface_property io_timerInterrupt associatedClock clk
 set_interface_property io_timerInterrupt associatedReset ""
 set_interface_property io_timerInterrupt ENABLED true
 set_interface_property io_timerInterrupt EXPORT_OF ""
 set_interface_property io_timerInterrupt PORT_NAME_MAP ""
 set_interface_property io_timerInterrupt SVD_ADDRESS_GROUP ""
-add_interface_port io_timerInterrupt io_timerInterrupt export Input 1
+add_interface_port io_timerInterrupt io_timerInterrupt irq Input 1
 
 
 
