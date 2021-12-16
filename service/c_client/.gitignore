@@ -1,0 +1,3 @@
+*.o
+jtag_uart_send_cmd
+
