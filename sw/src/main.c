@@ -2,16 +2,11 @@
 #include "task.h"
 #include "semphr.h"
 
-#define DELAY_LOOP 10000
-#define TRUE 1
+#include "io.h"
 
-char foo;
+#define DELAY_LOOP 10000
 
 int fibonacci[100];
-
-void printf(char *c) {
-    foo = *c;
-}
 
 void task1 (void *pvParameters) {
     fibonacci[0] = 0;
@@ -21,40 +16,38 @@ void task1 (void *pvParameters) {
         fibonacci[i] = fibonacci[i - 1] + fibonacci[i - 2];
     }
 
-    while(TRUE) {
+    char buf[32];
 
-        printf("Task 1\n");
+    while (1) {
+        int n = jtag_uart_readline(buf, sizeof(buf));
+        for (int i = 0; i < n / 2; i++) {
+            char c = buf[i];
+            buf[i] = buf[n - i - 1];
+            buf[n - i - 1] = c;
+        }
 
-        taskYIELD();
-
-        for(int i = 0; i < DELAY_LOOP; i++)
-            portNOP();
+        jtag_uart_print("Reversed: ");
+        jtag_uart_print(buf);
+        jtag_uart_putc('\n');
     }
-
-    vTaskDelete(NULL);
-
 }
 
 void task2 (void *pvParameters) {
-
-    while(TRUE) {
-
-        printf("task 2\n");
+    while(1) {
+        jtag_uart_print("Task 2\n");
 
         taskYIELD();
 
         for(int i = 0; i < DELAY_LOOP; i++)
             portNOP();
     }
-
-    vTaskDelete(NULL);
 }
 
-int main( void )
+int main(void)
 {
-    printf("Starting FreeRTOS\n");
+    jtag_uart_print("Starting FreeRTOS\n");
     xTaskCreate(task1, "Task 1", 100, NULL, 1, NULL);
-     xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
+    xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
     vTaskStartScheduler();
 
     return 0;
@@ -111,7 +104,7 @@ void vApplicationTickHook( void )
 
 void vAssertCalled( void )
 {
-volatile uint32_t ulSetTo1ToExitFunction = 0;
+    volatile uint32_t ulSetTo1ToExitFunction = 0;
 
     taskDISABLE_INTERRUPTS();
     while( ulSetTo1ToExitFunction != 1 )
@@ -120,10 +113,9 @@ volatile uint32_t ulSetTo1ToExitFunction = 0;
     }
 }
 
-void handle_trap(void)
+void SystemIrqHandler(uint32_t mcause) 
 {
-    while (1)
-        ;
+    //jtag_uart_printf("freeRTOS: Unknown interrupt (0x%x)\n", mcause);
 }
 
 void vPortSetupTimerInterrupt(void)
