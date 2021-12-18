@@ -144,7 +144,6 @@ $(BUILD_DIR)/%.S.o: %.S
 
 $(PROG_ELF): $(OBJS) $(LD_SCRIPT)
 	@echo "[LINK] $@"
-	@echo tutaj: $(OBJS)
 	$(CC) $(LDFLAGS) -T $(LD_SCRIPT) -Wl,-Map=$(LINK_MAP) $(OBJS) -o $@
 
 $(PROG_HEX): $(PROG_ELF)
