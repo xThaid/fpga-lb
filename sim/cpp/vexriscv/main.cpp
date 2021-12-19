@@ -3,7 +3,7 @@
 #include <verilated_vcd_c.h>
 #include "verilated.h"
 
-#include "memory.h"
+#include "periph.h"
 #include "memctrl.h"
 #include "sim.h"
 
@@ -119,12 +119,26 @@ class Simulation {
 public:
 
     Simulation() {
-        mem = new Memory();
+        mem = new Memory(0x00000000, 0x0000ffff);
         mem->loadHexFile("../../../sw/build/fpga_lb.hex");
 
+        JtagUART *uart = new JtagUART(0x80000000, 0x80000007);
+        MTimer *mtimer = new MTimer(0x80001000, 0x8000100f);
+        GPIOControl *gpioctrl = new GPIOControl(0x80002000, 0x80002003);
+        TSE *tse = new TSE(0x80003000, 0x800033ff);
+
+        tse->setLogAccess(1);
+
         vex = new VexRiscv(new VVexRiscvCpu());
-        ibus = new IBusCtrl(mem);
-        dbus = new DBusCtrl(mem);
+        ibus = new IBusCtrl();
+        ibus->addSlave(mem);
+
+        dbus = new DBusCtrl();
+        dbus->addSlave(mem);
+        dbus->addSlave(uart);
+        dbus->addSlave(mtimer);
+        dbus->addSlave(gpioctrl);
+        dbus->addSlave(tse);
 
         ibus->avalonRead.assign(&vex->iBusRead);
         ibus->avalonAddress.assign(&vex->iBusAddress);

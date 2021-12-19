@@ -3,16 +3,16 @@
 #include <cstdint>
 #include <queue>
 
-#include "memory.h"
 #include "sim.h"
 #include "signal.h"
+#include "bus.h"
 
 struct IBusAvalonRsp {
     uint32_t data;
     bool error;
 };
 
-class IBusCtrl : public SimElement {
+class IBusCtrl : public SimElement, public MemBusCtrl {
 public:
     InputSignal<uint8_t> avalonRead;
     InputSignal<uint32_t> avalonAddress;
@@ -21,14 +21,13 @@ public:
     OutputSignal<uint8_t> avalonWaitRequestn;
     OutputSignal<uint8_t> avalonResponse;
 
-    IBusCtrl(Memory* mem);
+    IBusCtrl();
 
     void reset();
     void cycle();
     void postCycle();
 
 private:
-    Memory* mem;
     std::queue<IBusAvalonRsp> respQ;
 };
 
@@ -37,7 +36,7 @@ struct DBusAvalonRsp {
 	bool error;
 };
 
-class DBusCtrl : public SimElement {
+class DBusCtrl : public SimElement, public MemBusCtrl {
 public:
     InputSignal<uint8_t> avalonRead;
     InputSignal<uint8_t> avalonWrite;
@@ -49,13 +48,12 @@ public:
     OutputSignal<uint8_t> avalonWaitRequestn;
     OutputSignal<uint8_t> avalonResponse;
 
-    DBusCtrl(Memory* mem);
+    DBusCtrl();
 
     void reset();
     void cycle();
     void postCycle();
 
 private:
-    Memory* mem;
     std::queue<DBusAvalonRsp> respQ;
 };

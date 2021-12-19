@@ -1,13 +1,34 @@
-#include "memory.h"
+#include "periph.h"
 
-#include <cstdio>
+#include <cstdlib>
+#include <fstream>
 
-Memory::Memory(){
-    for(size_t i = 0; i < (1 << 12);i++) mem[i] = NULL;
+Memory::Memory(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("On-chip SRAM", baseAddr, endAddr)
+{
+    for(size_t i = 0; i < (1 << 12); i++)
+        mem[i] = NULL;
 }
 
 Memory::~Memory(){
-    for(size_t i = 0; i < (1 << 12);i++) if(mem[i]) delete [] mem[i];
+    for(size_t i = 0; i < (1 << 12); i++)
+        if(mem[i]) delete [] mem[i];
+}
+
+uint32_t Memory::read(uint32_t addr) {
+    uint32_t ret;
+    uint8_t *data = (uint8_t *)&ret;
+    for(size_t i = 0; i < 4;i++){
+        data[i] = (*this)[addr + i];
+    }
+    return ret;
+}
+
+void Memory::write(uint32_t addr, uint32_t data, uint8_t mask) {
+    for (size_t i = 0; i < 4; i++) {
+        if ((1 << i) & mask)
+            (*this)[addr + i] = ((uint8_t *)&data)[i];
+    }
 }
 
 uint8_t* Memory::get(uint32_t address){
@@ -24,22 +45,9 @@ uint8_t* Memory::get(uint32_t address){
     return &mem[address >> 20][address & 0xFFFFF];
 }
 
-void Memory::read(uint32_t address, uint32_t length, uint8_t *data){
-    for(size_t i = 0; i < length;i++){
-        data[i] = (*this)[address + i];
-    }
-}
-
 void Memory::write(uint32_t address, uint32_t length, uint8_t *data){
     for(size_t i = 0; i < length;i++){
         (*this)[address + i] = data[i];
-    }
-}
-
-void Memory::write(uint32_t address, uint8_t mask, uint8_t* data) {
-    for (size_t i = 0; i < 4; i++) {
-        if ((1 << i) & mask)
-            (*this)[address + i] = data[i];
     }
 }
 
@@ -108,4 +116,52 @@ void Memory::loadHexFile(const std:: string& path) {
         line++;
         file_size_in_byte--;
     }
+}
+
+JtagUART::JtagUART(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("JTAG UART", baseAddr, endAddr)
+{
+}
+
+uint32_t JtagUART::read(uint32_t addr) {
+    return 0x00000000;
+}
+
+void JtagUART::write(uint32_t addr, uint32_t data, uint8_t mask) {
+}
+
+MTimer::MTimer(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("mtimer", baseAddr, endAddr)
+{
+}
+
+uint32_t MTimer::read(uint32_t addr) {
+    return 0x00000000;
+}
+
+void MTimer::write(uint32_t addr, uint32_t data, uint8_t mask) {
+}
+
+GPIOControl::GPIOControl(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("GPIO control", baseAddr, endAddr)
+{
+}
+
+uint32_t GPIOControl::read(uint32_t addr) {
+    return 0x00000000;
+}
+
+void GPIOControl::write(uint32_t addr, uint32_t data, uint8_t mask) {
+}
+
+TSE::TSE(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("TSE", baseAddr, endAddr)
+{
+}
+
+uint32_t TSE::read(uint32_t addr) {
+    return 0x00000000;
+}
+
+void TSE::write(uint32_t addr, uint32_t data, uint8_t mask) {
 }

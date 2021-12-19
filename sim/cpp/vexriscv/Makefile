@@ -1,7 +1,7 @@
 TOPDIR = $(realpath ../../..)
 
 MODULE := VexRiscvCpu
-SOURCES := main.cpp memctrl.cpp memory.cpp sim.cpp
+SOURCES := main.cpp memctrl.cpp periph.cpp sim.cpp bus.cpp
 
 VERILOG_SOURCES := spinal/VexRiscvCpu.v
 

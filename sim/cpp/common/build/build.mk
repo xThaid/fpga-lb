@@ -3,7 +3,7 @@ ifneq ($(VERBOSE), 1)
 endif
 
 CXX := g++
-CXXFLAGS := -std=c++11 -Wall -Og -g -faligned-new -fcf-protection=none
+CXXFLAGS := -std=c++17 -Wall -Og -g -faligned-new -fcf-protection=none
 FLAGS := 
 
 VERILATOR_ROOT := /usr/local/share/verilator
@@ -24,8 +24,6 @@ all: test
 
 test: sim
 
-sim: waveform.vcd
-
 verilate: .stamp.verilate
 
 build: $(EXECUTABLE)
@@ -33,6 +31,9 @@ build: $(EXECUTABLE)
 waves: waveform.vcd
 	@echo "[GTKWAVE]"
 	gtkwave waveform.vcd $(MODULE).gtkw &
+
+sim: $(EXECUTABLE)
+	@./$(EXECUTABLE)
 
 waveform.vcd: $(EXECUTABLE)
 	@echo "[SIMULATION] $(MODULE)"
