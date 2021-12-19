@@ -18,6 +18,9 @@ set_output_delay  -clock [get_clocks CLOCK_50] 2   [get_ports ENET1_MDC]
 set_input_delay   -clock [get_clocks CLOCK_50] 2   [get_ports ENET1_MDIO]
 set_output_delay  -clock [get_clocks CLOCK_50] 2   [get_ports ENET1_MDIO]
 
+set_false_path -from [get_ports ENET0_INT_N] -to *
+set_false_path -from * -to [get_ports ENET0_RST_N]
+
 set_false_path -from [get_ports SW[*]]
 set_false_path -from [get_ports KEY[*]]
 set_false_path -to [get_ports LEDR[*]]

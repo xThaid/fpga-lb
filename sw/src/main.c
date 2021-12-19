@@ -48,6 +48,8 @@ void heartBeatTask(void *pvParameters) {
 }
 
 int main(void) {
+    tse_setup();
+
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
     xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
     vTaskStartScheduler();

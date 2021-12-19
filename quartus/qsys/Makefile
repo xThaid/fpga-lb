@@ -21,6 +21,7 @@ clean: $(QSYS_COMPONENTS:%=%-hw-clean)
 	rm -rf *.sopcinfo
 	rm -rf build .qsys_edit
 	rm -rf *.tcl~
+	rm -rf $(QSYS_SYSTEM)
 
 %.sopcinfo: $(HWCOMP-SOURCES_REL) $(HWCOMP-FILES) %.qsys
 	@echo "[QSYS-GEN] $*.qsys"

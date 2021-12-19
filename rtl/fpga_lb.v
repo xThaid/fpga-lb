@@ -68,6 +68,7 @@ module fpga_lb(
   assign ENET0_MDIO = mdio0_oen ? 1'bz : mdio0_out;
   
   assign ENET0_GTX_CLK = tx_clk;
+  assign ENET0_RST_N = pll_rst_locked;
 
   pll pll_0 (
     .areset (pll_rst),
@@ -88,10 +89,34 @@ module fpga_lb(
   );
 
   lb_system u0 (
-    .clk_clk                (sys_clk),
-    .reset_reset_n          (pll_rst_locked),
-    .gpio_ledr              (LEDR),
-    .gpio_ledg              (LEDG)
+    .clk_clk                  (sys_clk),
+    .mac_0_mdio_mdc           (ENET0_MDC),
+    .mac_0_mdio_mdio_in       (mdio0_in),
+    .mac_0_mdio_mdio_out      (mdio0_out),
+    .mac_0_mdio_mdio_oen      (mdio0_oen),
+    .mac_0_pcs_rx_clk_clk     (ENET0_RX_CLK),
+    .mac_0_pcs_tx_clk_clk     (tx_clk),
+    .mac_0_rgmii_rgmii_in     (ENET0_RX_DATA),
+    .mac_0_rgmii_rgmii_out    (ENET0_TX_DATA),
+    .mac_0_rgmii_rx_control   (ENET0_RX_DV),
+    .mac_0_rgmii_tx_control   (ENET0_TX_EN),
+    .mac_0_status_set_10      (1'b0),
+    .mac_0_status_set_1000    (1'b0),
+    .mac_0_status_eth_mode    (),
+    .mac_0_status_ena_10      (),
+    .mac_0_misc_ff_tx_crc_fwd (),
+    .mac_0_misc_ff_tx_septy   (),
+    .mac_0_misc_tx_ff_uflow   (),
+    .mac_0_misc_ff_tx_a_full  (),
+    .mac_0_misc_ff_tx_a_empty (),
+    .mac_0_misc_rx_err_stat   (),
+    .mac_0_misc_rx_frm_type   (),
+    .mac_0_misc_ff_rx_dsav    (),
+    .mac_0_misc_ff_rx_a_full  (),
+    .mac_0_misc_ff_rx_a_empty (),
+    .reset_reset_n            (pll_rst_locked),
+    .gpio_ledr                (LEDR),
+    .gpio_ledg                (LEDG)
   );
 
 endmodule
