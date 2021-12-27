@@ -1,0 +1,47 @@
+open !Base
+open Hardcaml
+
+module Endpoint = struct
+  module type S = sig
+    module Params : Interface.S
+    module Payload : Interface.S
+
+    module type SourceToSink = sig 
+      type 'a t =
+        { valid : 'a
+        ; first : 'a
+        ; last : 'a
+        ; params : 'a Params.t
+        ; payload : 'a Payload.t
+        }
+        [@@deriving sexp_of, hardcaml]
+    end
+
+    module type SinkToSource = sig 
+      type 'a t =
+        { ready : 'a
+        }
+      [@@deriving sexp_of, hardcaml]
+    end
+
+  end
+
+  module Make (Params : Interface.S) (Payload : Interface.S) : S = struct
+    module Params = Params
+    module Payload = Payload
+  end
+end
+
+module StreamEndpoint (Params : Interface.S) (Payload : Interface.S) = struct 
+
+  type 'a t = 
+  { src2si : 'a SourceToSink.t
+  ; si2src : 'a SinkToSource.t
+  }
+
+  let connect sink source = 
+    SourceToSink.Of_signal.assign sink.src2si source.src2si;
+    SinkToSource.Of_signal.assign source.si2src sink.si2src
+  let ( <== ) = connect
+end
+
