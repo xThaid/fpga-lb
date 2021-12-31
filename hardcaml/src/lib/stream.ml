@@ -1,6 +1,23 @@
 open !Base
 open Hardcaml
 
+module Source = struct 
+  type 'a t =
+    { valid : 'a
+    ; last : 'a
+    ; data : 'a [@bits 32]
+    ; empty : 'a [@bits 2]
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
+module Dest = struct 
+  type 'a t =
+    { ready : 'a
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
 module Endpoint (Params : Interface.S) = struct 
   module SourceToSink = struct 
     type 'a t =

@@ -1,0 +1,25 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Thu Dec 30 13:21:16 2021
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/lib/stream.gtkw"
+[timestart] 0
+[size] 1920 1023
+[pos] -269 -1104
+*-4.000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 166
+[sst_expanded] 1
+[sst_vpaned_height] 290
+@28
+inputs.clock
+inputs.sink_ready
+@22
+inputs.source_data[31:0]
+@28
+inputs.source_empty[1:0]
+inputs.source_last
+inputs.source_valid
+[pattern_trace] 1
+[pattern_trace] 0
