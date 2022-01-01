@@ -1,138 +1,169 @@
 open Base
 open Hardcaml
+open Hardcaml_waveterm
 open Lb_dataplane
 open !Expect_test_helpers_base
 module Out_channel = Stdio.Out_channel
 
 module TestHeader = struct 
   type 'a t =
-    { field1 : 'a[@bits 48]
-    ; field2 : 'a[@bits 48]
-    ; field3 : 'a[@bits 16]
+    { field1 : 'a [@bits 48]
+    ; field2 : 'a [@bits 8]
+    ; field3 : 'a [@bits 16]
     }
   [@@deriving sexp_of, hardcaml]
 end
 
-module Byte_with_valid = struct
-  module Pre = struct
-    include With_valid
-
-    let t = 
-      { valid = ("valid", 1)
-      ; value = ("value", 8)
-      }
-    ;;
-  end
-
-  include Pre
-  include Hardcaml.Interface.Make(Pre)
-end
-
-module CircuitBuilder (HeaderData : Interface.S) = struct
-  module Endpoint = Stream.Endpoint(Interface.Empty)
+module DepacketizerSim (HeaderData : Interface.S) = struct
   module Header = Packet.Header(TestHeader)
-  module Depacketizer = Packet.Depacketizer(Interface.Empty)(TestHeader)
+  module Depacketizer = Packet.Depacketizer(TestHeader)
 
   module I = struct
     type 'a t =
        { clock : 'a
        ; reset : 'a
-       ; source : 'a Stream.Source.t [@rtlprefix "source_"]
-       ; sink : 'a Stream.Dest.t [@rtlprefix "sink_"]
+       ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
+       ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
        }
     [@@deriving sexp_of, hardcaml]
   end
   
   module O = struct
     type 'a t =
-      { source : 'a Stream.Dest.t [@rtlprefix "source_"]
-      ; sink : 'a Stream.Source.t [@rtlprefix "sink_"]
-      ; header : 'a Header.t
+      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      ; header : 'a Header.t [@rtl_prefix "hdr_"]
       }
     [@@deriving sexp_of, hardcaml]
   end
 
-  let create_depacketizer () = 
-    let clock = Signal.input "clock" 1 in
-    let reset = Signal.input "reset" 1 in
-    let reg_spec = Reg_spec.create ~clock ~reset () in
+  let create () = 
+    let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+      let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let source = Endpoint.create_named ~prefix:"source_" () in
-    let sink = Endpoint.create_named ~prefix:"sink_" () in
-    
-    let hdr = Header.Of_signal.outputs (Depacketizer.create reg_spec sink source) in
+      let source_rx = Flow.Dest.Of_signal.wires () in
+      let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let outputs = Header.to_list hdr @ Endpoint.sink_outputs sink @ Endpoint.source_outputs source in
-    Circuit.create_exn ~name:"depacketizer_test" outputs
+      let sink = Flow.Endpoint.create sink_rx i.sink_tx in
+      let source = Flow.Endpoint.create i.source_tx source_rx in
+
+      let hdr = Depacketizer.create spec ~sink ~source in
+      
+      {O.source_rx = source.dst;
+       sink_rx = sink.src;
+       header = hdr;
+      }
+    in
+
+    let module Sim = Cyclesim.With_interface(I)(O) in
+    Sim.create create_fn
 
 end
 
 module Emitter = struct
   type t =
-    { stream_len : int
+    { enable : bool ref
+    ; stream_len : int
     ; stream_pos : int ref
-    ; src : Bits.t ref Stream.Source.t
-    ; dst : Bits.t ref Stream.Dest.t
+    ; src : Bits.t ref Flow.Source.t
+    ; dst : Bits.t ref Flow.Dest.t
     }
-    
-    let update_wires t = 
+
+    let comb t = 
       t.src.data := List.init 4 ~f:(fun i -> Bits.of_int ~width:8 (!(t.stream_pos) + i + 1)) |> Bits.concat_msb;
-      t.src.valid := Bits.of_bool (!(t.stream_pos) < t.stream_len);
+      t.src.valid := Bits.of_bool (!(t.stream_pos) < t.stream_len && !(t.enable));
       t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.stream_pos) - t.stream_len));
       t.src.last := Bits.of_bool (4 + !(t.stream_pos) >= t.stream_len)
 
-    let cycle t =
-      if Bits.is_vdd !(t.dst.ready) then t.stream_pos := !(t.stream_pos) + 4;
-      update_wires t
+    let seq t =
+      if (Bits.is_vdd !(t.dst.ready)) && (!(t.stream_pos) < t.stream_len && !(t.enable)) then t.stream_pos := !(t.stream_pos) + 4
 
-    let create (src : Bits.t ref Stream.Source.t) (dst : Bits.t ref Stream.Dest.t) len =
+    let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) len =
       let t = 
-        { stream_len = len
-        ; stream_pos = ref 1
+        { enable = ref false
+        ; stream_len = len
+        ; stream_pos = ref 0
         ; src
         ; dst
         } 
       in
-      update_wires t;
       t
 end
 
-let dump_vcd ~filename sim = 
-  let chan = Out_channel.create filename in
-  let sim = Vcd.Gtkwave.wrap chan sim in
-  Out_channel.close chan;
-  sim
+let%expect_test "tmp" =
+  let module DepacketizerSim = DepacketizerSim(TestHeader) in
+  let sim = DepacketizerSim.create () in
+  (* let sim = Vcd.Gtkwave.gtkwave ~args:"--save=/home/thaid/uni/fpga/fpga-lb/hardcaml/test/lib/stream.gtkw" sim in *)
+  let waves, sim = Waveform.create sim in
 
-let () =
-  let module CircuitBuilder = CircuitBuilder (TestHeader) in
-  let circuit = CircuitBuilder.create_depacketizer () in
-  let sim = Cyclesim.create circuit in
-  let sim = Vcd.Gtkwave.gtkwave ~args:"--save=/home/thaid/uni/fpga/fpga-lb/hardcaml/test/lib/stream.gtkw" sim in
+  let inputs = Cyclesim.inputs sim in
+  let outputs = Cyclesim.outputs sim in
 
-  let source_valid = Cyclesim.in_port sim "source_valid" in
-  let source_data = Cyclesim.in_port sim "source_data" in
-  let source_ready = Cyclesim.out_port sim "source_ready" in
-  let sink_ready = Cyclesim.in_port sim "sink_ready" in
-  
-  let source_data_cnt = ref 0 in
-  let update_source () = 
-    if Bits.is_vdd !source_ready then (
-      source_data := Bits.concat_msb [
-        Bits.of_int ~width:8 !source_data_cnt;
-        Bits.of_int ~width:8 (!source_data_cnt + 1);
-        Bits.of_int ~width:8 (!source_data_cnt + 2);
-        Bits.of_int ~width:8 (!source_data_cnt + 3)];
-      source_data_cnt := !source_data_cnt + 4;
-      source_valid := Bits.vdd
-    ) else ()
+  let emitter = Emitter.create inputs.source_tx outputs.source_rx 31 in
+
+  let cycle () =
+    Cyclesim.cycle_check sim;
+
+    Emitter.comb emitter;
+    Cyclesim.cycle_before_clock_edge sim;
+
+    Emitter.seq emitter;
+    Cyclesim.cycle_at_clock_edge sim;
+
+    Emitter.comb emitter;
+    Cyclesim.cycle_after_clock_edge sim;
+  in
+  let cycle_n n = 
+    for _ = 0 to n - 1 do
+      cycle ()
+    done;
   in
 
-  sink_ready := Bits.vdd;
-  Cyclesim.cycle sim;
+  emitter.enable := false;
 
-  for _ = 0 to 10 do
-    update_source ();
-    Cyclesim.cycle sim
-  done;
+  inputs.sink_tx.ready := Bits.gnd;
 
+  cycle_n 2;
+  emitter.enable := true;
+  cycle_n 2;
+  emitter.enable := false;
+  cycle_n 2;
+  emitter.enable := true;
+  cycle_n 3;
 
+  inputs.sink_tx.ready := Bits.vdd;
+  cycle_n 3;
+
+  emitter.enable := false;
+  cycle_n 1;
+  emitter.enable := true;
+  cycle_n 1;
+  inputs.sink_tx.ready := Bits.gnd;
+  cycle_n 2;
+  inputs.sink_tx.ready := Bits.vdd;
+  cycle_n 4;
+
+  Hardcaml_waveterm.Waveform.expect ~serialize_to:"depacketizer1" waves;
+
+  [%expect {|
+    ┌Signals────────┐┌Waves──────────────────────────────────────────────┐
+    │clock          ││┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌──│
+    │               ││    └───┘   └───┘   └───┘   └───┘   └───┘   └───┘  │
+    │reset          ││                                                   │
+    │               ││───────────────────────────────────────────────────│
+    │sink_ready     ││                                                   │
+    │               ││───────────────────────────────────────────────────│
+    │               ││────────────────────────┬───────┬──────────────────│
+    │source_data    ││ 01020304               │050607.│090A0B0C          │
+    │               ││────────────────────────┴───────┴──────────────────│
+    │               ││───────────────────────────────────────────────────│
+    │source_empty   ││ 0                                                 │
+    │               ││───────────────────────────────────────────────────│
+    │source_last    ││                                                   │
+    │               ││───────────────────────────────────────────────────│
+    │source_valid   ││                ┌───────────────┐               ┌──│
+    │               ││────────────────┘               └───────────────┘  │
+    │               ││────────────────────────────────┬──────────────────│
+    │field1         ││ 000000000000                   │000000000102      │
+    └───────────────┘└───────────────────────────────────────────────────┘
+    8cbe57f9c21f50eb17e2698bc06c2245|}]
