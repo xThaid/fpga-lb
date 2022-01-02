@@ -191,7 +191,7 @@ let%expect_test "header_disassemble" =
   let module HeaderDisassembleSim = HeaderDisassembleSim(TestHeader) in
   let module Sim = Sim.Sim(HeaderDisassembleSim) in
   
-  let sim = Sim.create ~name:"header_disassemble" ~gtkwave:true () in
+  let sim = Sim.create ~name:"header_disassemble" ~gtkwave:false () in
 
   let inputs = Sim.inputs sim in
 
@@ -247,7 +247,7 @@ let%expect_test "header_disassemble" =
     └───────────────┘└───────────────────────────────────────────────────┘
     3b8290e81e70b62b635fba12fab45640|}]
 
-(*
+
 module PacketizerSim (HeaderData : Interface.S) = struct
   module Header = Packet.Header(TestHeader)
   module Packetizer = Packet.Packetizer(TestHeader)
@@ -271,25 +271,98 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  let create () = 
-    let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
-      let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
+  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+    let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-      let source_rx = Flow.Dest.Of_signal.wires () in
-      let sink_rx = Flow.Source.Of_signal.wires () in
+    let source_rx = Flow.Dest.Of_signal.wires () in
+    let sink_rx = Flow.Source.Of_signal.wires () in
 
-      let sink = Flow.Endpoint.create sink_rx i.sink_tx in
-      let source = Flow.Endpoint.create i.source_tx source_rx in
+    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
+    let source = Flow.Endpoint.create i.source_tx source_rx in
 
-      Flow.Endpoint.connect sink (Packetizer.create spec ~hdr:i.header ~source);
-      
-      {O.source_rx = source.dst;
-        sink_rx = sink.src;
-      }
-    in
-
-    let module Sim = Cyclesim.With_interface(I)(O) in
-    Sim.create create_fn
-
+    Flow.Endpoint.connect sink (Packetizer.create spec ~hdr:i.header ~source);
+    
+    {O.source_rx = source.dst;
+      sink_rx = sink.src;
+    }
 end
-*)
+
+let%expect_test "packetizer_unaligned" =
+  let module PacketizerSim = PacketizerSim(TestHeader) in
+  let module Sim = Sim.Sim(PacketizerSim) in
+  
+  let sim = Sim.create ~name:"packetizer_unaligned" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let emitter = Emitter.create {src = inputs.source_tx; dst = outputs.source_rx; len = 24} in
+
+  Sim.add_element sim (module Emitter) emitter;
+
+  emitter.enable := false;
+
+  inputs.header.data.field1 := (Bits.of_hex ~width:48 "f0f1f2f3f4f5");
+  inputs.header.data.field2 := (Bits.of_hex ~width:8 "f6");
+  inputs.header.data.field3 := (Bits.of_hex ~width:16 "f7f8");
+
+  Sim.cycle_n sim 2;
+  inputs.header.valid := Bits.vdd;
+  Sim.cycle_n sim 2;
+  inputs.sink_tx.ready := Bits.vdd;
+  Sim.cycle_n sim 1;
+  emitter.enable := true;
+  inputs.header.valid := Bits.gnd;
+  Sim.cycle_n sim 7;
+  inputs.header.valid := Bits.vdd;
+  inputs.header.data.field2 := (Bits.of_hex ~width:8 "a6");
+
+  Sim.cycle_n sim 1;
+  inputs.header.valid := Bits.gnd;
+  Emitter.reset emitter;
+  Sim.cycle_n sim 1;
+  inputs.sink_tx.ready := Bits.gnd;
+  Sim.cycle_n sim 1;
+  inputs.sink_tx.ready := Bits.vdd;
+  Sim.cycle_n sim 1;
+  inputs.sink_tx.ready := Bits.gnd;
+  Sim.cycle_n sim 2;
+  inputs.sink_tx.ready := Bits.vdd;
+  Sim.cycle_n sim 1;
+  inputs.sink_tx.ready := Bits.gnd;
+  Sim.cycle_n sim 1;
+  inputs.sink_tx.ready := Bits.vdd;
+  Sim.cycle_n sim 5;
+
+  Emitter.reset emitter;
+  emitter.enable := false;
+  inputs.header.valid := Bits.vdd;
+  Sim.cycle_n sim 6;
+  emitter.enable := true;
+
+  Sim.cycle_n sim 15;
+
+  Sim.expect_waves sim;
+
+  [%expect {|
+    ┌Signals────────┐┌Waves──────────────────────────────────────────────┐
+    │clock          ││┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌──│
+    │               ││    └───┘   └───┘   └───┘   └───┘   └───┘   └───┘  │
+    │reset          ││                                                   │
+    │               ││───────────────────────────────────────────────────│
+    │               ││───────────────────────────────────────────────────│
+    │field1         ││ F0F1F2F3F4F5                                      │
+    │               ││───────────────────────────────────────────────────│
+    │               ││───────────────────────────────────────────────────│
+    │field2         ││ F6                                                │
+    │               ││───────────────────────────────────────────────────│
+    │               ││───────────────────────────────────────────────────│
+    │field3         ││ F7F8                                              │
+    │               ││───────────────────────────────────────────────────│
+    │sink_ready     ││                                ┌──────────────────│
+    │               ││────────────────────────────────┘                  │
+    │               ││───────────────────────────────────────────────────│
+    │source_data    ││ 01020304                                          │
+    │               ││───────────────────────────────────────────────────│
+    └───────────────┘└───────────────────────────────────────────────────┘
+    717a57024c58de79b1eb122d769ec15c|}]
