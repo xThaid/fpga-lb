@@ -3,10 +3,8 @@ open Hardcaml
 open Hardcaml_waveterm
 
 module type SimElement = sig
-  type config
   type t
 
-  val create : config -> t
   val comb : t -> unit
   val seq : t -> unit 
 end

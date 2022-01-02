@@ -1,44 +1,7 @@
 open Base
 open Hardcaml
 open Lb_dataplane
-
-module Emitter = struct
-  type config = 
-    { src : Bits.t ref Flow.Source.t
-    ; dst : Bits.t ref Flow.Dest.t
-    ; len : int
-    }
-
-  type t =
-    { enable : bool ref
-    ; stream_len : int ref
-    ; stream_pos : int ref
-    ; src : Bits.t ref Flow.Source.t
-    ; dst : Bits.t ref Flow.Dest.t
-    }
-
-  let comb t = 
-    t.src.data := List.init 4 ~f:(fun i -> Bits.of_int ~width:8 (!(t.stream_pos) + i + 1)) |> Bits.concat_msb;
-    t.src.valid := Bits.of_bool (!(t.stream_pos) < !(t.stream_len) && !(t.enable));
-    t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.stream_pos) - !(t.stream_len)));
-    t.src.last := Bits.of_bool (4 + !(t.stream_pos) >= !(t.stream_len))
-
-  let seq t =
-    if (Bits.is_vdd !(t.dst.ready)) && (!(t.stream_pos) < !(t.stream_len) && !(t.enable)) then t.stream_pos := !(t.stream_pos) + 4
-
-  let create (cfg : config) =
-    {enable = ref false;
-     stream_len = ref cfg.len;
-     stream_pos = ref 0;
-     src = cfg.src;
-     dst = cfg.dst;
-    } 
-
-  let reset t ?(n = 0) () =
-    t.stream_pos := 0;
-    if n <> 0 then
-      t.stream_len := n
-end
+open Sim_elements
 
 module TestHeader = struct 
   type 'a t =
@@ -48,7 +11,6 @@ module TestHeader = struct
     }
   [@@deriving sexp_of, hardcaml]
 end
-
 
 module DepacketizerSim (HeaderData : Interface.S) = struct
   module Header = Packet.Header(TestHeader)
@@ -101,13 +63,15 @@ let%expect_test "depacketizer_unaligned" =
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
 
-  let emitter = Emitter.create {src = inputs.source_tx; dst = outputs.source_rx; len = 31} in
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx 31 in
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
 
-  Sim.add_element sim (module Emitter) emitter;
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module FlowConsumer) consumer;
 
   emitter.enable := false;
 
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
 
   Sim.cycle_n sim 2;
   emitter.enable := true;
@@ -117,32 +81,46 @@ let%expect_test "depacketizer_unaligned" =
   emitter.enable := true;
   Sim.cycle_n sim 3;
 
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 3;
 
   emitter.enable := false;
   Sim.cycle_n sim 1;
   emitter.enable := true;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
 
-  Emitter.reset emitter ();
+  FlowEmitter.reset emitter ();
   Sim.cycle_n sim 2;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 7;
 
-  Emitter.reset emitter ~n:29 ();
+  FlowEmitter.reset emitter ~n:29 ();
   Sim.cycle_n sim 9;
-  inputs.sink_tx.ready := Bits.gnd;
-  Emitter.reset emitter ~n:28 ();
+  consumer.enable := false;
+  FlowEmitter.reset emitter ~n:28 ();
   Sim.cycle_n sim 5;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
 
   Sim.cycle_n sim 10;
+
+  FlowConsumer.expect_data consumer;
 
   Sim.expect_waves sim;
 
   [%expect {|
+    0a0b0c0d 0e0f1011 12131415 16171819
+    1a1b1c1d 1e1f
+
+    0a0b0c0d 0e0f1011 12131415 16171819
+    1a1b1c1d 1e1f
+
+    0a0b0c0d 0e0f1011 12131415 16171819
+    1a1b1c1d
+
+    0a0b0c0d 0e0f1011 12131415 16171819
+    1a1b1c
+
     ┌Signals────────┐┌Waves──────────────────────────────────────────────┐
     │clock          ││┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌──│
     │               ││    └───┘   └───┘   └───┘   └───┘   └───┘   └───┘  │
@@ -207,26 +185,31 @@ let%expect_test "header_disassemble" =
   let sim = Sim.create ~name:"header_disassemble" ~gtkwave:false () in
 
   let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
+
+  Sim.add_element sim (module FlowConsumer) consumer;
 
   inputs.header.data.field1 := (Bits.of_hex ~width:48 "f0f1f2f3f4f5");
   inputs.header.data.field2 := (Bits.of_hex ~width:8 "f6");
   inputs.header.data.field3 := (Bits.of_hex ~width:16 "f7f8");
 
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
   Sim.cycle_n sim 2;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 1;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 1;
   inputs.header.valid := Bits.gnd;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
 
   inputs.header.data.field2 := (Bits.of_hex ~width:8 "a6");
   inputs.header.valid := Bits.vdd;
@@ -235,9 +218,14 @@ let%expect_test "header_disassemble" =
 
   Sim.cycle_n sim 10;
 
+  FlowConsumer.expect_data consumer;
   Sim.expect_waves sim;
 
   [%expect {|
+    f0f1f2f3 f4f5f6f7 f8
+
+    f0f1f2f3 f4f5a6f7 f8
+
     ┌Signals────────┐┌Waves──────────────────────────────────────────────┐
     │clock          ││┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌──│
     │               ││    └───┘   └───┘   └───┘   └───┘   └───┘   └───┘  │
@@ -309,9 +297,11 @@ let%expect_test "packetizer_unaligned" =
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
 
-  let emitter = Emitter.create {src = inputs.source_tx; dst = outputs.source_rx; len = 24} in
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx 24 in
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
 
-  Sim.add_element sim (module Emitter) emitter;
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module FlowConsumer) consumer;
 
   emitter.enable := false;
 
@@ -322,7 +312,7 @@ let%expect_test "packetizer_unaligned" =
   Sim.cycle_n sim 2;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 2;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 1;
   emitter.enable := true;
   inputs.header.valid := Bits.gnd;
@@ -332,22 +322,22 @@ let%expect_test "packetizer_unaligned" =
 
   Sim.cycle_n sim 1;
   inputs.header.valid := Bits.gnd;
-  Emitter.reset emitter ();
+  FlowEmitter.reset emitter ();
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
   Sim.cycle_n sim 2;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.gnd;
+  consumer.enable := false;
   Sim.cycle_n sim 1;
-  inputs.sink_tx.ready := Bits.vdd;
+  consumer.enable := true;
   Sim.cycle_n sim 5;
 
-  Emitter.reset emitter ();
+  FlowEmitter.reset emitter ();
   emitter.enable := false;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 6;
@@ -355,9 +345,22 @@ let%expect_test "packetizer_unaligned" =
 
   Sim.cycle_n sim 15;
 
+  FlowConsumer.expect_data consumer;
   Sim.expect_waves sim;
 
   [%expect {|
+    f0f1f2f3 f4f5f6f7 f8010203 04050607
+    08090a0b 0c0d0e0f 10111213 14151617
+    18
+
+    f0f1f2f3 f4f5a6f7 f8010203 04050607
+    08090a0b 0c0d0e0f 10111213 14151617
+    18
+
+    f0f1f2f3 f4f5a6f7 f8010203 04050607
+    08090a0b 0c0d0e0f 10111213 14151617
+    18
+
     ┌Signals────────┐┌Waves──────────────────────────────────────────────┐
     │clock          ││┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌──│
     │               ││    └───┘   └───┘   └───┘   └───┘   └───┘   └───┘  │

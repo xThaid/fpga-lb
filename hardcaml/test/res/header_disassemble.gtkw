@@ -1,13 +1,13 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Sat Jan  1 20:53:36 2022
+[*] Sun Jan  2 21:34:56 2022
 [*]
 [dumpfile] "(null)"
-[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/lib/header_disassemble.gtkw"
-[timestart] 0
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/header_disassemble.gtkw"
+[timestart] 27
 [size] 1583 731
 [pos] -1 -1
-*-4.000000 4 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-4.000000 42 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 247
 [signals_width] 250
 [sst_expanded] 1
@@ -20,9 +20,10 @@ inputs.field2[7:0]
 inputs.field3[15:0]
 @28
 inputs.valid
-inputs.sink_ready
 @200
 -
+@29
+inputs.sink_ready
 @22
 outputs.sink_data[31:0]
 @28
