@@ -1,43 +1,56 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Fri Dec 31 18:00:18 2021
+[*] Sun Jan  2 17:17:44 2022
 [*]
 [dumpfile] "(null)"
-[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/lib/stream.gtkw"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/depacketizer_unaligned.gtkw"
 [timestart] 0
 [size] 1920 1023
 [pos] -1 -1
-*-4.000000 31 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-4.000000 32 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 247
 [signals_width] 273
 [sst_expanded] 1
 [sst_vpaned_height] 579
 @28
 inputs.clock
-inputs.reset
-inputs.sink_ready
+@200
+-
 @22
+[color] 1
 inputs.source_data[31:0]
 @24
+[color] 1
 inputs.source_empty[1:0]
 @28
+[color] 1
 inputs.source_last
+[color] 1
 inputs.source_valid
+[color] 1
+outputs.source_ready
 @200
 -
 @22
 outputs.field1[47:0]
-@23
 outputs.field2[7:0]
-@22
 outputs.field3[15:0]
+@28
+outputs.valid
+@200
+-
+@22
+[color] 1
 outputs.sink_data[31:0]
 @24
+[color] 1
 outputs.sink_empty[1:0]
 @28
+[color] 1
 outputs.sink_last
+[color] 1
 outputs.sink_valid
-outputs.source_ready
-outputs.valid
+[color] 1
+inputs.sink_ready
 [pattern_trace] 1
 [pattern_trace] 0

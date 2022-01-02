@@ -11,7 +11,7 @@ module Emitter = struct
 
   type t =
     { enable : bool ref
-    ; stream_len : int
+    ; stream_len : int ref
     ; stream_pos : int ref
     ; src : Bits.t ref Flow.Source.t
     ; dst : Bits.t ref Flow.Dest.t
@@ -19,23 +19,25 @@ module Emitter = struct
 
   let comb t = 
     t.src.data := List.init 4 ~f:(fun i -> Bits.of_int ~width:8 (!(t.stream_pos) + i + 1)) |> Bits.concat_msb;
-    t.src.valid := Bits.of_bool (!(t.stream_pos) < t.stream_len && !(t.enable));
-    t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.stream_pos) - t.stream_len));
-    t.src.last := Bits.of_bool (4 + !(t.stream_pos) >= t.stream_len)
+    t.src.valid := Bits.of_bool (!(t.stream_pos) < !(t.stream_len) && !(t.enable));
+    t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.stream_pos) - !(t.stream_len)));
+    t.src.last := Bits.of_bool (4 + !(t.stream_pos) >= !(t.stream_len))
 
   let seq t =
-    if (Bits.is_vdd !(t.dst.ready)) && (!(t.stream_pos) < t.stream_len && !(t.enable)) then t.stream_pos := !(t.stream_pos) + 4
+    if (Bits.is_vdd !(t.dst.ready)) && (!(t.stream_pos) < !(t.stream_len) && !(t.enable)) then t.stream_pos := !(t.stream_pos) + 4
 
   let create (cfg : config) =
     {enable = ref false;
-     stream_len = cfg.len;
+     stream_len = ref cfg.len;
      stream_pos = ref 0;
      src = cfg.src;
      dst = cfg.dst;
     } 
 
-  let reset t =
-    t.stream_pos := 0
+  let reset t ?(n = 0) () =
+    t.stream_pos := 0;
+    if n <> 0 then
+      t.stream_len := n
 end
 
 module TestHeader = struct 
@@ -47,9 +49,10 @@ module TestHeader = struct
   [@@deriving sexp_of, hardcaml]
 end
 
+
 module DepacketizerSim (HeaderData : Interface.S) = struct
   module Header = Packet.Header(TestHeader)
-  module Depacketizer = Packet.Depacketizer(TestHeader)
+  module Packetizer = Packet.Packetizer(TestHeader)
 
   module I = struct
     type 'a t =
@@ -79,7 +82,9 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
     let sink = Flow.Endpoint.create sink_rx i.sink_tx in
     let source = Flow.Endpoint.create i.source_tx source_rx in
 
-    let hdr = Depacketizer.create spec ~sink ~source in
+    let hdr, sink2 = Packetizer.create_depacketizer spec ~source in
+
+    Flow.Endpoint.connect sink sink2;
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
@@ -121,11 +126,19 @@ let%expect_test "depacketizer_unaligned" =
   Sim.cycle_n sim 1;
   inputs.sink_tx.ready := Bits.gnd;
 
-  Emitter.reset emitter;
+  Emitter.reset emitter ();
   Sim.cycle_n sim 2;
   inputs.sink_tx.ready := Bits.vdd;
+  Sim.cycle_n sim 7;
 
-  Sim.cycle_n sim 15;
+  Emitter.reset emitter ~n:29 ();
+  Sim.cycle_n sim 9;
+  inputs.sink_tx.ready := Bits.gnd;
+  Emitter.reset emitter ~n:28 ();
+  Sim.cycle_n sim 5;
+  inputs.sink_tx.ready := Bits.vdd;
+
+  Sim.cycle_n sim 10;
 
   Sim.expect_waves sim;
 
@@ -150,7 +163,7 @@ let%expect_test "depacketizer_unaligned" =
     │               ││────────────────────────────────┬──────────────────│
     │field1         ││ 000000000000                   │000000000102      │
     └───────────────┘└───────────────────────────────────────────────────┘
-    34c3ff3a165c09c1a7efa0b4048f9dce|}]
+    62792abc1d15743bbc6a5a2857ad0bcf|}]
 
 
 module HeaderDisassembleSim (HeaderData : Interface.S) = struct
@@ -280,7 +293,7 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     let sink = Flow.Endpoint.create sink_rx i.sink_tx in
     let source = Flow.Endpoint.create i.source_tx source_rx in
 
-    Flow.Endpoint.connect sink (Packetizer.create spec ~hdr:i.header ~source);
+    Flow.Endpoint.connect sink (Packetizer.create_packetizer spec ~hdr:i.header ~source);
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
@@ -319,7 +332,7 @@ let%expect_test "packetizer_unaligned" =
 
   Sim.cycle_n sim 1;
   inputs.header.valid := Bits.gnd;
-  Emitter.reset emitter;
+  Emitter.reset emitter ();
   Sim.cycle_n sim 1;
   inputs.sink_tx.ready := Bits.gnd;
   Sim.cycle_n sim 1;
@@ -334,7 +347,7 @@ let%expect_test "packetizer_unaligned" =
   inputs.sink_tx.ready := Bits.vdd;
   Sim.cycle_n sim 5;
 
-  Emitter.reset emitter;
+  Emitter.reset emitter ();
   emitter.enable := false;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 6;

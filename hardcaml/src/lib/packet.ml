@@ -70,41 +70,12 @@ module Packetizer (HeaderData : Interface.S) = struct
 
     Flow.Endpoint.create flow_src flow_dst
 
-  let create reg_spec ~(hdr : 'a Header.t) ~(source : 'a Flow.Endpoint.t) =
-    let header_shift = header_len % word_width in
-
-    let hdr_flow = header_disassemble reg_spec ~hdr in
-    let joined_flow = Flow.Endpoint.join reg_spec ~shift:(header_shift / 8) ~flow1:hdr_flow ~flow2:source in
-
-    joined_flow
-
-end
-
-module Depacketizer (HeaderData : Interface.S) = struct
-  module Header = Header(HeaderData)
-
-  let word_width = Flow.Source.port_widths.data
-  let header_len = Header.data_len
-
-  module States = struct
-    type t =
-      | Idle
-      | ReadHeader
-      | ReadPayload
-    [@@deriving sexp_of, compare, enumerate]
-  end
-
-  let create reg_spec ~(sink : 'a Flow.Endpoint.t) ~(source : 'a Flow.Endpoint.t) =
+  let header_assemble reg_spec ~(source : 'a Flow.Endpoint.t) =
     let open Signal in
-
-    (* sink_ready_early denotes if the sink will be ready in the next cycle *)
-    let sink, sink_ready_early = Flow.Endpoint.bufferize reg_spec sink in
-
-    let header_shift = header_len % word_width in
 
     if header_len <= word_width then raise_s [%message "packet header with length <= word width is not supported"];
     if header_len % 8 <> 0 then raise_s [%message "packet header should have length divisible by 8"];
-    
+
     let header = Header.Of_signal.wires () in
     let header_words = (header_len + word_width - 1) / word_width in
     let header_buf_width = header_words * word_width in
@@ -113,61 +84,45 @@ module Depacketizer (HeaderData : Interface.S) = struct
     let header_buf = Always.Variable.reg ~width:header_buf_width reg_spec in
     let append_hdr_buf () = Always.(header_buf <-- ((sll header_buf.value word_width) |: (uresize source.src.data header_buf_width))) in
 
-    let sm = Always.State_machine.create (module States) ~enable:vdd reg_spec in
-
-    let hdr_word_counter = Always.Variable.reg ~width:(num_bits_to_represent header_words) reg_spec in
-
-    let ready_next = Always.Variable.reg reg_spec ~width:1 in
-
-    let shifted_source, shifted_source_ready_next = Flow.Endpoint.shifter ~shift:(header_shift / 8) reg_spec source in
+    let busy = Always.Variable.reg ~width:1 reg_spec in
 
     Always.(compile [
-    sm.switch [
-      Idle, [
-        hdr_word_counter <--. 1;
-        ready_next <--. 1;
+      if_ busy.value [
         when_ source.src.valid [
           append_hdr_buf ();
-          sm.set_next ReadHeader
-        ]
-      ];
-
-      ReadHeader, [
-        ready_next <--. 1;
-        when_ source.src.valid [
-          append_hdr_buf ();
-          hdr_word_counter <-- hdr_word_counter.value +:. 1;
-          when_ (hdr_word_counter.value ==:. header_words - 1) [
+          when_ source.src.last [
             header_valid_next <-- vdd;
-            ready_next <-- sink_ready_early;
-            sm.set_next ReadPayload
+            busy <--. 0;
           ];
         ]
-      ];
-
-      ReadPayload, [
-        ready_next <-- (sink_ready_early &: shifted_source_ready_next);
-        
-        when_ (sink.dst.ready &: shifted_source.valid) [
-          when_ shifted_source.last [
-            ready_next <--. 1;
-            sm.set_next Idle;
-          ]
+      ] [
+        when_ source.src.valid [
+          append_hdr_buf ();
+          busy <--. 1;
         ]
       ]
-    ]
     ]);
 
-  source.dst.ready <== ready_next.value;
+    source.dst.ready <== vdd;
 
-  header.valid <== reg reg_spec header_valid_next.value;
-  HeaderData.Of_signal.(header.data <== unpack ~rev:true (sel_top header_buf.value header_len));
+    header.valid <== (reg reg_spec header_valid_next.value);
+    HeaderData.Of_signal.(header.data <== unpack ~rev:true (sel_top header_buf.value header_len));
 
-  sink.src.valid <== (shifted_source.valid &: (sm.is ReadPayload));
-  sink.src.empty <== shifted_source.empty;
-  sink.src.data <== shifted_source.data;
-  sink.src.last <== shifted_source.last;
+    header
 
-  header
+  let create_packetizer reg_spec ~(hdr : 'a Header.t) ~(source : 'a Flow.Endpoint.t) =
+    let header_shift = header_len % word_width in
+
+    let hdr_flow = header_disassemble reg_spec ~hdr in
+    let joined_flow = Flow.Endpoint.join reg_spec ~shift:(header_shift / 8) ~source1:hdr_flow ~source2:source in
+
+    Flow.Endpoint.bufferize reg_spec joined_flow
+
+  let create_depacketizer reg_spec ~(source : 'a Flow.Endpoint.t) =
+    let flow1, flow2 = Flow.Endpoint.split reg_spec ~hdr_length:header_len ~source in
+
+    let hdr = header_assemble reg_spec ~source:flow1 in
+
+    hdr, Flow.Endpoint.bufferize reg_spec flow2
 
 end
