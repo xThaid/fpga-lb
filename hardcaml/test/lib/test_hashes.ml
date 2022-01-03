@@ -6,7 +6,7 @@ open Expect_test_helpers_base
 let test_crc32 data_in state_in = 
   let data_in_bits = Bits.of_int ~width:32 data_in in
   let state_in_bits = Bits.of_int ~width:32 state_in in
-  let result = Hash.crc32 (module Bits) state_in_bits data_in_bits |> Bits.to_int in
+  let result = Hashes.crc32 (module Bits) state_in_bits data_in_bits |> Bits.to_int in
   print_s [%message (result : int)]
 
 let%expect_test "crc32" =

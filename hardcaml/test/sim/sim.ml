@@ -29,9 +29,16 @@ module Sim (S : S) = struct
     ; waves : Waveform.t
     }
 
-  let create ~name ?(gtkwave = false) () = 
+  let create ~name ?(gtkwave = false) ?(verilator = false) ?(trace = false) () = 
     let module CSim = Cyclesim.With_interface (S.I)(S.O) in
-    let sim = CSim.create S.create_fn in
+    let module VSim = Hardcaml_verilator.With_interface (S.I)(S.O) in
+
+    let sim = 
+      if verilator then
+        VSim.create ~clock_names:[ "clock" ] S.create_fn
+      else
+        CSim.create ~config:(Cyclesim.Config.trace trace) S.create_fn 
+    in
 
     let sim = if gtkwave then
        Vcd.Gtkwave.gtkwave ~args:("--save=../../../test/res/" ^ name ^ ".gtkw") sim
@@ -67,7 +74,7 @@ module Sim (S : S) = struct
 
     elements_comb ();
     Cyclesim.cycle_before_clock_edge t.sim;
-
+    
     elements_seq ();
     Cyclesim.cycle_at_clock_edge t.sim;
 
@@ -80,6 +87,10 @@ module Sim (S : S) = struct
     done
 
   let expect_waves t =
-    Hardcaml_waveterm.Waveform.expect ~serialize_to:"header_disassemble_unaligned" t.waves
+    Hardcaml_waveterm.Waveform.expect ~serialize_to:t.name t.waves
+
+  let expect_trace_digest t =
+    let digest = Cyclesim.digest t.sim in
+    Stdio.print_endline (Sexp.to_string_mach (Hardcaml.Cyclesim.Digest.sexp_of_t !(digest)))
 
 end
