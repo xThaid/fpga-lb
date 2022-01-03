@@ -1,6 +1,5 @@
 open Base
 open Hardcaml
-open Hardcaml_waveterm
 
 module type SimElement = sig
   type t
@@ -26,7 +25,6 @@ module Sim (S : S) = struct
     { name : string
     ; elements : (module SimElement_instance) list ref
     ; sim : (Bits.t ref S.I.t, Bits.t ref S.O.t) Cyclesim.t
-    ; waves : Waveform.t
     }
 
   let create ~name ?(gtkwave = false) ?(verilator = false) ?(trace = false) () = 
@@ -46,12 +44,9 @@ module Sim (S : S) = struct
       sim
     in
 
-    let waves, sim = Waveform.create sim in
-
     {name;
      elements = ref [];
      sim;
-     waves;
     }
 
   let add_element (type a) t (module Q : SimElement with type t = a) inst =
@@ -85,9 +80,6 @@ module Sim (S : S) = struct
     for _ = 0 to n - 1 do
       cycle t
     done
-
-  let expect_waves t =
-    Hardcaml_waveterm.Waveform.expect ~serialize_to:t.name t.waves
 
   let expect_trace_digest t =
     let digest = Cyclesim.digest t.sim in

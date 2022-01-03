@@ -3,7 +3,7 @@
  (inline_tests
   (flags (-verbose)))
  (libraries base expect_test_helpers_core.expect_test_helpers_base hardcaml
-  hardcaml_step_testbench hardcaml_waveterm hardcaml_verilator
+  hardcaml_step_testbench hardcaml_verilator
   stdio lb_dataplane)
  (preprocess 
   (pps ppx_deriving_hardcaml ppx_jane ppx_expect)))
