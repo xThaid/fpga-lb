@@ -12,9 +12,163 @@ module TestHeader = struct
   [@@deriving sexp_of, hardcaml]
 end
 
+module PacketizerFullSim (HeaderData : Interface.S) = struct
+  module Header = Packet.Header(HeaderData)
+  module Packetizer = Packet.Packetizer(HeaderData)
+
+  module I = struct
+    type 'a t =
+       { clock : 'a
+       ; reset : 'a
+       ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
+       ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+       }
+    [@@deriving sexp_of, hardcaml]
+  end
+  
+  module O = struct
+    type 'a t =
+      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+    let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
+
+    let source_rx = Flow.Dest.Of_signal.wires () in
+    let sink_rx = Flow.Source.Of_signal.wires () in
+
+    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
+    let source = Flow.Endpoint.create i.source_tx source_rx in
+
+    let hdr, inter_flow = Packetizer.create_depacketizer spec ~source in
+
+    let hdr_transf = Header.Of_signal.wires () in
+
+    let out_flow = Packetizer.create_packetizer spec ~hdr:hdr_transf ~source:inter_flow in
+
+    Flow.Endpoint.connect sink out_flow;
+
+    Signal.assign hdr_transf.valid hdr.valid;
+    (* HeaderData.Of_signal.pack hdr.data |> Signal.negate |> HeaderData.Of_signal.unpack |> HeaderData.Of_signal.assign hdr_transf.data; *)
+    HeaderData.Of_signal.assign hdr_transf.data @@ HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8");
+    
+    {O.source_rx = source.dst;
+      sink_rx = sink.src;
+    }
+end
+
+let%expect_test "packetizer_full_unaligned" =
+  let module PacketizerFullSim = PacketizerFullSim(TestHeader) in
+  let module Sim = Sim.Sim(PacketizerFullSim) in
+  
+  let sim = Sim.create ~name:"packetizer_full_unaligned" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
+
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module FlowConsumer) consumer;
+
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 31);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 31);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 28);
+
+  emitter.enable := false;
+
+  consumer.enable := false;
+
+  Sim.cycle_n sim 2;
+  emitter.enable := true;
+  Sim.cycle_n sim 2;
+  emitter.enable := false;
+  Sim.cycle_n sim 2;
+  emitter.enable := true;
+  Sim.cycle_n sim 3;
+
+  consumer.enable := true;
+  Sim.cycle_n sim 3;
+
+  emitter.enable := false;
+  Sim.cycle_n sim 1;
+  emitter.enable := true;
+  Sim.cycle_n sim 1;
+  consumer.enable := false;
+  Sim.cycle_n sim 5;
+
+  Sim.cycle_n sim 2;
+  consumer.enable := true;
+  Sim.cycle_n sim 7;
+
+  Sim.cycle_n sim 9;
+  consumer.enable := false;
+  Sim.cycle_n sim 5;
+  consumer.enable := true;
+
+  Sim.cycle_n sim 20;
+
+  FlowConsumer.expect_data consumer;
+
+  [%expect {|
+    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c 1d1e1f
+
+    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c 1d1e1f
+
+    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c 1d
+
+    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c |}]
+
+let%expect_test "packetizer_full_fast_unaligned" =
+  let module PacketizerFullSim = PacketizerFullSim(TestHeader) in
+  let module Sim = Sim.Sim(PacketizerFullSim) in
+  
+  let sim = Sim.create ~name:"packetizer_full_unaligned" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
+
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module FlowConsumer) consumer;
+
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 31);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:100 44);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
+
+  emitter.enable := true;
+
+  consumer.enable := true;
+
+  Sim.cycle_n sim 45;
+
+  FlowConsumer.expect_data consumer;
+
+  [%expect {|
+    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c 1d1e1f
+
+    b0b1b2b3 b4b5b6b7 b86d6e6f 70717273
+    74757677 78797a7b 7c7d7e7f 80818283
+    84858687 88898a8b 8c8d8e8f
+
+    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c 1d |}]
+
 module DepacketizerSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(TestHeader)
-  module Packetizer = Packet.Packetizer(TestHeader)
+  module Header = Packet.Header(HeaderData)
+  module Packetizer = Packet.Packetizer(HeaderData)
 
   module I = struct
     type 'a t =
@@ -63,12 +217,17 @@ let%expect_test "depacketizer_unaligned" =
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
 
-  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx 31 in
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
   let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
 
   Sim.add_element sim (module FlowEmitter) emitter;
   Sim.add_element sim (module FlowConsumer) consumer;
 
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 31);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 31);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 28);
+
   emitter.enable := false;
 
   consumer.enable := false;
@@ -90,15 +249,12 @@ let%expect_test "depacketizer_unaligned" =
   Sim.cycle_n sim 1;
   consumer.enable := false;
 
-  FlowEmitter.reset emitter ();
   Sim.cycle_n sim 2;
   consumer.enable := true;
   Sim.cycle_n sim 7;
 
-  FlowEmitter.reset emitter ~n:29 ();
   Sim.cycle_n sim 9;
   consumer.enable := false;
-  FlowEmitter.reset emitter ~n:28 ();
   Sim.cycle_n sim 5;
   consumer.enable := true;
 
@@ -141,12 +297,12 @@ let%expect_test "depacketizer_unaligned" =
     │               ││────────────────────────────────┬──────────────────│
     │field1         ││ 000000000000                   │000000000102      │
     └───────────────┘└───────────────────────────────────────────────────┘
-    62792abc1d15743bbc6a5a2857ad0bcf|}]
+    cba058f9993f6bb657c1f31a18ba349a|}]
 
 
 module HeaderDisassembleSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(TestHeader)
-  module Packetizer = Packet.Packetizer(TestHeader)
+  module Header = Packet.Header(HeaderData)
+  module Packetizer = Packet.Packetizer(HeaderData)
 
   module I = struct
     type 'a t =
@@ -250,8 +406,8 @@ let%expect_test "header_disassemble" =
 
 
 module PacketizerSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(TestHeader)
-  module Packetizer = Packet.Packetizer(TestHeader)
+  module Header = Packet.Header(HeaderData)
+  module Packetizer = Packet.Packetizer(HeaderData)
 
   module I = struct
     type 'a t =
@@ -297,11 +453,15 @@ let%expect_test "packetizer_unaligned" =
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
 
-  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx 24 in
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
   let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
 
   Sim.add_element sim (module FlowEmitter) emitter;
   Sim.add_element sim (module FlowConsumer) consumer;
+
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 24);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 24);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 24);
 
   emitter.enable := false;
 
@@ -322,7 +482,6 @@ let%expect_test "packetizer_unaligned" =
 
   Sim.cycle_n sim 1;
   inputs.header.valid := Bits.gnd;
-  FlowEmitter.reset emitter ();
   Sim.cycle_n sim 1;
   consumer.enable := false;
   Sim.cycle_n sim 1;
@@ -337,7 +496,6 @@ let%expect_test "packetizer_unaligned" =
   consumer.enable := true;
   Sim.cycle_n sim 5;
 
-  FlowEmitter.reset emitter ();
   emitter.enable := false;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 6;
@@ -381,4 +539,4 @@ let%expect_test "packetizer_unaligned" =
     │source_data    ││ 01020304                                          │
     │               ││───────────────────────────────────────────────────│
     └───────────────┘└───────────────────────────────────────────────────┘
-    717a57024c58de79b1eb122d769ec15c|}]
+    e4cc3d87c7e6608e125993f95bb854aa|}]

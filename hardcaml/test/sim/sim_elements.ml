@@ -5,33 +5,55 @@ open Lb_dataplane
 module FlowEmitter = struct
   type t =
     { enable : bool ref
-    ; stream_len : int ref
-    ; stream_pos : int ref
+    ; buff : bytes ref
+    ; buff_pos : int ref
+    ; transfers : bytes Linked_queue.t
     ; src : Bits.t ref Flow.Source.t
     ; dst : Bits.t ref Flow.Dest.t
     }
 
   let comb t = 
-    t.src.data := List.init 4 ~f:(fun i -> Bits.of_int ~width:8 (!(t.stream_pos) + i + 1)) |> Bits.concat_msb;
-    t.src.valid := Bits.of_bool (!(t.stream_pos) < !(t.stream_len) && !(t.enable));
-    t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.stream_pos) - !(t.stream_len)));
-    t.src.last := Bits.of_bool (4 + !(t.stream_pos) >= !(t.stream_len))
+    let get_nth_byte n = 
+      if n >= Bytes.length !(t.buff) then
+        Bits.ones 8
+      else
+        Bytes.get !(t.buff) n |> Bits.of_char
+    in
+
+    if !(t.buff_pos) >= Bytes.length !(t.buff) then (
+      match Linked_queue.dequeue t.transfers with
+      | None -> ()
+      | Some b -> t.buff_pos := 0; t.buff := b
+    );
+    
+    let buf_len = Bytes.length !(t.buff) in
+
+    t.src.data := List.init 4 ~f:(fun i -> get_nth_byte (!(t.buff_pos) + i)) |> Bits.concat_msb;
+    t.src.valid := Bits.of_bool (!(t.buff_pos) < buf_len && !(t.enable));
+    t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.buff_pos) - buf_len));
+    t.src.last := Bits.of_bool (4 + !(t.buff_pos) >= buf_len)
 
   let seq t =
-    if (Bits.is_vdd !(t.dst.ready)) && (!(t.stream_pos) < !(t.stream_len) && !(t.enable)) then t.stream_pos := !(t.stream_pos) + 4
+    let buf_len = Bytes.length !(t.buff) in
 
-  let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) (len : int) =
+    if (Bits.is_vdd !(t.dst.ready)) && !(t.buff_pos) < buf_len && !(t.enable) then
+      t.buff_pos := !(t.buff_pos) + 4
+
+  let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) =
     {enable = ref false;
-     stream_len = ref len;
-     stream_pos = ref 0;
+     buff = ref (Bytes.create 0);
+     buff_pos = ref 0;
+     transfers = Linked_queue.create ();
      src;
      dst;
-    } 
+    }
 
-  let reset t ?(n = 0) () =
-    t.stream_pos := 0;
-    if n <> 0 then
-      t.stream_len := n
+  let add_transfer t b =
+    Linked_queue.enqueue t.transfers b
+
+  let gen_seq_transfer ?(from = 1) n =
+    List.init n ~f:(fun i -> Char.unsafe_of_int (i + from)) |> Bytes.of_char_list
+
 end
 
 module FlowConsumer = struct
@@ -68,7 +90,7 @@ module FlowConsumer = struct
     {enable = ref false;
      src;
      dst;
-     buff = Buffer.create 16;
+     buff = Buffer.create 32;
      transfers = ref []
     }
 
