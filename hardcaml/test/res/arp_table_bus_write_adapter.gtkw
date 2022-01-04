@@ -1,0 +1,35 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Tue Jan  4 23:24:56 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/arp_table_bus_write_adapter.gtkw"
+[timestart] 0
+[size] 1729 796
+[pos] -1 -1
+*-4.000000 1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 250
+[sst_expanded] 1
+[sst_vpaned_height] 211
+@28
+inputs.clock
+@200
+-
+@22
+inputs.bus_writedata[31:0]
+@28
+inputs.bus_write
+inputs.bus_address[1:0]
+outputs.bus_waitrequest
+@22
+outputs.bus_readdata[31:0]
+@200
+-
+@22
+outputs.port_ip[31:0]
+outputs.port_mac[47:0]
+@28
+outputs.port_valid
+[pattern_trace] 1
+[pattern_trace] 0

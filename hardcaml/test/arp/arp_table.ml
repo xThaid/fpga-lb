@@ -77,7 +77,72 @@ let%expect_test "arp_table" =
 
   Sim.cycle_n sim 10;
 
-  Sim.output_verilog sim;
   Sim.expect_trace_digest sim;
 
   [%expect {| 66c20b7442bcded75e1a796395d09879 |}]
+
+
+module BusAdapterSim = struct
+  module BusAgent = Arp_table.WriteBusAdapter.BusAgent
+
+  module I = struct
+    type 'a t =
+      { clock : 'a
+      ; clear : 'a
+      ; bus : 'a BusAgent.I.t [@rtlprefix "bus_"]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  module O = struct
+    type 'a t =
+      { write_port : 'a Arp_table.WritePort.I.t [@rtlprefix "port_"]
+      ; bus : 'a BusAgent.O.t [@rtlprefix "bus_"]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
+    let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
+
+    let outs = O.Of_signal.wires ~named:true () in
+
+    Arp_table.WriteBusAdapter.create spec ~bus:{BusAgent.i = i.bus; o = outs.bus} ~write_port:outs.write_port;
+
+    outs
+
+end
+
+let%expect_test "arp_table_bus_write_adapter" =
+  let module Sim = Sim.Sim(BusAdapterSim) in
+  
+  let sim = Sim.create ~name:"arp_table_bus_write_adapter" ~gtkwave:false ~trace:false () in
+
+  let inputs = Sim.inputs sim in
+
+  let write_bus addr data = 
+    inputs.bus.address := Bits.of_int ~width:2 addr;
+    inputs.bus.writedata := Bits.of_hex ~width:32 data;
+    inputs.bus.write := Bits.vdd;
+    Sim.cycle sim;
+    inputs.bus.write := Bits.gnd
+  in
+
+  write_bus 0 "ff";
+  write_bus 1 "bb";
+  write_bus 2 "33";
+
+  write_bus 2 "44";
+
+  write_bus 3 "ff00bbaa";
+
+  write_bus 1 "ffffffff";
+  write_bus 0 "aaaaaaaa";
+
+  write_bus 2 "11223344";
+  
+  Sim.cycle_n sim 5;
+
+  Sim.expect_trace_digest sim;
+
+  [%expect {| ac8d220536b8c13d3981e9ad8aae1d9e |}]

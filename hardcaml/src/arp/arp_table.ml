@@ -165,3 +165,45 @@ let create ~capacity (scope : Scope.t) (input : Signal.t I.t) =
 let hierarchical ~capacity (scope : Scope.t) (input : Signal.t I.t) =
   let module H = Hierarchy.In_scope(I)(O) in
   H.hierarchical ~scope ~name:"arp_table" (create ~capacity) input
+
+
+module WriteBusAdapter = struct
+  module BusDesc : Bus.AgentDesc = struct
+    let addr_len = 2
+  end
+
+  module BusAgent = Bus.Agent(BusDesc)
+
+  let create spec ~(bus : Signal.t BusAgent.t) ~(write_port : Signal.t WritePort.I.t) =
+    let open Signal in
+
+    let mac_lo = Always.Variable.reg ~width:32 spec in
+    let mac_hi = Always.Variable.reg ~width:16 spec in
+    let ip = Always.Variable.reg ~width:32 spec in
+    let ready_next = Always.Variable.wire ~default:gnd in
+
+    Always.(compile [
+        BusAgent.on_write bus [
+          0, (fun data -> [
+            mac_lo <-- data;
+          ]);
+          
+          1, (fun data -> [
+            mac_hi <-- sel_bottom data 16;
+          ]);
+
+          2, (fun data -> [
+            ip <-- data;
+            ready_next <-- vdd;
+          ]);
+        ]
+    ]);
+
+    write_port.ip <== ip.value;
+    write_port.mac <== mac_hi.value @: mac_lo.value;
+    write_port.valid <== reg spec ready_next.value;
+
+    bus.o.waitrequest <== gnd;
+    bus.o.readdata <== zero 32
+
+end
