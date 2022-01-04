@@ -6,8 +6,7 @@ module ArpTableSim = struct
   module I = Arp_table.I
   module O = Arp_table.O
 
-  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
-    let scope = Scope.create ~flatten_design:true () in
+  let create_fn (scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     Arp_table.create ~capacity:32 scope i
 
 end
@@ -78,6 +77,7 @@ let%expect_test "arp_table" =
 
   Sim.cycle_n sim 10;
 
+  Sim.output_verilog sim;
   Sim.expect_trace_digest sim;
 
   [%expect {| 66c20b7442bcded75e1a796395d09879 |}]

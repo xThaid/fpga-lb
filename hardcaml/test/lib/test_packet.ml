@@ -34,7 +34,7 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
     let source_rx = Flow.Dest.Of_signal.wires () in
@@ -189,7 +189,7 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
     let source_rx = Flow.Dest.Of_signal.wires () in
@@ -301,7 +301,7 @@ module HeaderDisassembleSim (HeaderData : Interface.S) = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
     let sink_rx = Flow.Source.Of_signal.wires () in
@@ -388,7 +388,7 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  let create_fn (i : Signal.t I.t) : (Signal.t O.t) =
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
     let source_rx = Flow.Dest.Of_signal.wires () in

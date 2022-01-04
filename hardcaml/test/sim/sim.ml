@@ -17,7 +17,7 @@ module type S = sig
   module I : Interface.S
   module O : Interface.S
 
-  val create_fn : Signal.t I.t -> Signal.t O.t
+  val create_fn : Scope.t -> Signal.t I.t -> Signal.t O.t
 end
 
 module Sim (S : S) = struct
@@ -31,11 +31,14 @@ module Sim (S : S) = struct
     let module CSim = Cyclesim.With_interface (S.I)(S.O) in
     let module VSim = Hardcaml_verilator.With_interface (S.I)(S.O) in
 
+    let scope = Scope.create ~flatten_design:true () in
+    let create_fn = S.create_fn scope in
+
     let sim = 
       if verilator then
-        VSim.create ~clock_names:[ "clock" ] S.create_fn
+        VSim.create ~clock_names:[ "clock" ] create_fn
       else
-        CSim.create ~config:(Cyclesim.Config.trace trace) S.create_fn 
+        CSim.create ~config:(Cyclesim.Config.trace trace) create_fn
     in
 
     let sim = if gtkwave then
@@ -84,5 +87,15 @@ module Sim (S : S) = struct
   let expect_trace_digest t =
     let digest = Cyclesim.digest t.sim in
     Stdio.print_endline (Sexp.to_string_mach (Hardcaml.Cyclesim.Digest.sexp_of_t !(digest)))
+
+  let output_verilog t =
+    let module C = Circuit.With_interface (S.I) (S.O) in
+
+    let scope = Scope.create () in
+    let circuit = C.create_exn ~name:t.name (S.create_fn scope) in
+
+    let output_mode = Rtl.Output_mode.To_file("../../../bin/" ^ t.name ^ ".v") in
+
+    Rtl.output ~output_mode ~database:(Scope.circuit_database scope) Verilog circuit
 
 end

@@ -1,6 +1,5 @@
 open Base
 open Hardcaml
-open Utilities
 
 module ReadPort = struct
   module I = struct
@@ -149,12 +148,13 @@ let create ~capacity (scope : Scope.t) (input : Signal.t I.t) =
   in
 
   let ram =
-    RamV2.create_named
-      ~name:"arp_table_mem"
+    Ram.create_named
+      ~name:(Scope.name scope "arp_table_mem")
       ~collision_mode:Read_before_write
       ~size:capacity
       ~write_ports:[|ram_write_port|]
       ~read_ports:[|ram_read_port|]
+      ()
   in
 
   write_path scope spec input.write ram_write_port;
