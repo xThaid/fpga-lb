@@ -168,13 +168,12 @@ let hierarchical ~capacity (scope : Scope.t) (input : Signal.t I.t) =
 
 
 module WriteBusAdapter = struct
-  module BusDesc : Bus.AgentDesc = struct
-    let addr_len = 2
-  end
+  module Agent = Bus.Agent.Make (
+    struct
+      let addr_len = 2
+    end)
 
-  module BusAgent = Bus.Agent(BusDesc)
-
-  let create spec ~(bus : Signal.t BusAgent.t) ~(write_port : Signal.t WritePort.I.t) =
+  let create spec ~(bus : Agent.t) ~(write_port : Signal.t WritePort.I.t) =
     let open Signal in
 
     let mac_lo = Always.Variable.reg ~width:32 spec in
@@ -183,7 +182,7 @@ module WriteBusAdapter = struct
     let ready_next = Always.Variable.wire ~default:gnd in
 
     Always.(compile [
-        BusAgent.on_write bus [
+        Agent.on_write bus [
           0, (fun data -> [
             mac_lo <-- data;
           ]);
@@ -203,7 +202,9 @@ module WriteBusAdapter = struct
     write_port.mac <== mac_hi.value @: mac_lo.value;
     write_port.valid <== reg spec ready_next.value;
 
-    bus.o.waitrequest <== gnd;
-    bus.o.readdata <== zero 32
+    let bus_outs = Agent.outputs bus in
+
+    bus_outs.waitrequest <== gnd;
+    bus_outs.readdata <== zero 32
 
 end

@@ -83,7 +83,7 @@ let%expect_test "arp_table" =
 
 
 module BusAdapterSim = struct
-  module BusAgent = Arp_table.WriteBusAdapter.BusAgent
+  module BusAgent = Arp_table.WriteBusAdapter.Agent
 
   module I = struct
     type 'a t =
@@ -105,9 +105,14 @@ module BusAdapterSim = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
 
+    let bus = BusAgent.create_empty () in
+
     let outs = O.Of_signal.wires ~named:true () in
 
-    Arp_table.WriteBusAdapter.create spec ~bus:{BusAgent.i = i.bus; o = outs.bus} ~write_port:outs.write_port;
+    BusAgent.I.Of_signal.assign (BusAgent.inputs bus) i.bus;
+    BusAgent.O.Of_signal.assign outs.bus (BusAgent.outputs bus);
+
+    Arp_table.WriteBusAdapter.create spec ~bus ~write_port:outs.write_port;
 
     outs
 
