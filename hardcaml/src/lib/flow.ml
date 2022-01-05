@@ -46,59 +46,33 @@ module Endpoint = struct
   let bufferize reg_spec (source : 'a t) =
     let open Signal in
 
-    let sink = create_empty () in 
-
-    let store_in_to_out = Always.Variable.wire ~default:gnd in
-    let store_in_to_buff = Always.Variable.wire ~default:gnd in
-    let store_buff_to_out = Always.Variable.wire ~default:gnd in
-
-    let buffer = Source.Of_always.reg reg_spec in
-    let out = Source.Of_always.reg reg_spec in
-
-    let assign_step (dst : Always.Variable.t Source.t) (src : Signal.t Source.t) = 
-      Always.(proc [
-        dst.data <-- src.data;
-        dst.empty <-- src.empty;
-        dst.last <-- src.last;
-      ])
+    let module BufferData = struct
+        type 'a t =
+          { data : 'a [@bits 32]
+          ; empty : 'a [@bits 2]
+          ; last : 'a
+          }
+        [@@deriving sexp_of, hardcaml]
+      end
     in
 
-    (* Enable ready input next cycle if output is ready or the buffer will not be filled on the next cycle *)
-    let input_ready_early = sink.dst.ready |: (((~:) buffer.valid.value) &: (((~:) out.valid.value) |: ((~:) source.src.valid))) in
-    let input_ready = reg reg_spec input_ready_early in
+    let module Buffer = Fifos.Buffer(BufferData) in
 
-    Always.(compile [
-      if_ input_ready [
-        (* Input is ready *)
-        if_ (sink.dst.ready |: ((~:) out.valid.value)) [
-          (* Output is ready or currently not valid, transfer data to output *)
-          out.valid <-- source.src.valid;
-          store_in_to_out <--. 1
-        ] [
-          (* Output is not ready, store input in buffer *)
-          buffer.valid <-- source.src.valid;
-          store_in_to_buff <--. 1
-        ]
-      ] @@ elif sink.dst.ready [
-        (* Input is not ready, but output is ready *)
-        out.valid <-- buffer.valid.value;
-        buffer.valid <--. 0;
-        store_buff_to_out <--. 1
-      ] [];
+    let sink = create_empty () in 
 
-      if_ store_in_to_out.value [
-        assign_step out source.src
-      ] @@ elif store_in_to_buff.value [
-        assign_step buffer source.src
-      ] [];
+    let buffer_in = Buffer.I.Of_signal.wires () in
+    buffer_in.wr_enable <== source.src.valid;
+    buffer_in.rd_enable <== sink.dst.ready;
+    buffer_in.wr_data.data <== source.src.data;
+    buffer_in.wr_data.empty <== source.src.empty;
+    buffer_in.wr_data.last <== source.src.last;
 
-      when_ store_buff_to_out.value [
-        assign_step out (Source.Of_always.value buffer)
-      ]
-    ]);
-
-    source.dst.ready <== input_ready_early;
-    Source.Of_signal.(sink.src <== (Source.Of_always.value out));
+    let buffer_out = Buffer.create reg_spec buffer_in in
+    source.dst.ready <== buffer_out.ready_next;
+    sink.src.valid <== buffer_out.rd_valid;
+    sink.src.data <== buffer_out.rd_data.data;
+    sink.src.last <== buffer_out.rd_data.last;
+    sink.src.empty <== buffer_out.rd_data.empty;
 
     sink
 
