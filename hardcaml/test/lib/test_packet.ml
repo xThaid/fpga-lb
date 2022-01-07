@@ -45,15 +45,15 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
 
     let hdr, inter_flow = Packetizer.create_depacketizer spec ~source in
 
-    let hdr_transf = Header.Of_signal.wires () in
+    let hdr_transf = Header.create_empty () in
 
     let out_flow = Packetizer.create_packetizer spec ~hdr:hdr_transf ~source:inter_flow in
 
     Flow.Endpoint.connect sink out_flow;
 
-    Signal.assign hdr_transf.valid hdr.valid;
+    Signal.assign hdr_transf.s.valid hdr.s.valid;
     (* HeaderData.Of_signal.pack hdr.data |> Signal.negate |> HeaderData.Of_signal.unpack |> HeaderData.Of_signal.assign hdr_transf.data; *)
-    HeaderData.Of_signal.assign hdr_transf.data @@ HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8");
+    HeaderData.Of_signal.assign hdr_transf.s.data @@ HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8");
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
@@ -176,6 +176,7 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
        ; reset : 'a
        ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
        ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+       ; header : 'a Header.Dst.t [@rtlprefix "hdr_"]
        }
     [@@deriving sexp_of, hardcaml]
   end
@@ -184,7 +185,7 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
     type 'a t =
       { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
       ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
-      ; header : 'a Header.t [@rtl_prefix "hdr_"]
+      ; header : 'a Header.Src.t [@rtlprefix "hdr_"]
       }
     [@@deriving sexp_of, hardcaml]
   end
@@ -200,11 +201,13 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
 
     let hdr, sink2 = Packetizer.create_depacketizer spec ~source in
 
+    Header.Dst.Of_signal.assign hdr.d i.header;
+
     Flow.Endpoint.connect sink sink2;
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
-      header = hdr;
+      header = hdr.s;
     }
 end
 
@@ -289,7 +292,7 @@ module PacketizerSim (HeaderData : Interface.S) = struct
         ; reset : 'a
         ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
         ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
-        ; header : 'a Header.t [@rtl_prefix "hdr_"]
+        ; header : 'a Header.Src.t [@rtlprefix "hdr_"]
         }
     [@@deriving sexp_of, hardcaml]
   end
@@ -298,6 +301,7 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     type 'a t =
       { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
       ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      ; header : 'a Header.Dst.t [@rtlprefix "hdr_"]
       }
     [@@deriving sexp_of, hardcaml]
   end
@@ -310,11 +314,14 @@ module PacketizerSim (HeaderData : Interface.S) = struct
 
     let sink = Flow.Endpoint.create sink_rx i.sink_tx in
     let source = Flow.Endpoint.create i.source_tx source_rx in
-
-    Flow.Endpoint.connect sink (Packetizer.create_packetizer spec ~hdr:i.header ~source);
     
-    {O.source_rx = source.dst;
-      sink_rx = sink.src;
+    let hdr = Header.create i.header (Header.Dst.Of_signal.wires ()) in
+
+    Flow.Endpoint.connect sink (Packetizer.create_packetizer spec ~hdr ~source);
+    
+    {O.source_rx = source.dst
+    ; sink_rx = sink.src
+    ; header = hdr.d
     }
 end
 
@@ -393,4 +400,4 @@ let%expect_test "packetizer_unaligned" =
     08090a0b 0c0d0e0f 10111213 14151617
     18
 
-    e4cc3d87c7e6608e125993f95bb854aa|}]
+    f97ea6af7abf48d9b0f075275d24a512|}]

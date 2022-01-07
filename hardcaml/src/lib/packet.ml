@@ -5,7 +5,7 @@ module Packetizer (Data : Interface.S) = struct
   module Header = Transaction.Transaction(Data)
   module Serializer = Transaction.Serializer(Data)
 
-  let create_packetizer reg_spec ~(hdr : Signal.t Header.t) ~(source : Flow.Endpoint.t) =
+  let create_packetizer reg_spec ~(hdr : Header.t) ~(source : Flow.Endpoint.t) =
     let header_shift = Header.data_len % Flow.Endpoint.word_width in
 
     let hdr_flow = Serializer.serialize reg_spec hdr in

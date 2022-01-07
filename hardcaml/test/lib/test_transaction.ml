@@ -21,7 +21,7 @@ module SerializerSim (Data : Interface.S) = struct
         { clock : 'a
         ; reset : 'a
         ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
-        ; tst : 'a Transaction.t [@rtl_prefix "tst_"]
+        ; tst : 'a Transaction.Src.t [@rtlprefix "tst_"]
         }
     [@@deriving sexp_of, hardcaml]
   end
@@ -29,6 +29,7 @@ module SerializerSim (Data : Interface.S) = struct
   module O = struct
     type 'a t =
       { sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      ; tst : 'a Transaction.Dst.t [@rtlprefix "tst_"]
       }
     [@@deriving sexp_of, hardcaml]
   end
@@ -40,9 +41,11 @@ module SerializerSim (Data : Interface.S) = struct
 
     let sink = Flow.Endpoint.create sink_rx i.sink_tx in
 
-    Flow.Endpoint.connect sink (Serializer.serialize spec i.tst);
+    let tst = Transaction.create i.tst (Transaction.Dst.Of_signal.wires ()) in
+
+    Flow.Endpoint.connect sink (Serializer.serialize spec tst);
     
-    {O.sink_rx = sink.src;}
+    {O.sink_rx = sink.src; tst = tst.d}
 
 end
 
@@ -94,4 +97,4 @@ let%expect_test "transaction_serializer" =
 
     f0f1f2f3 f4f5a6f7 f8
 
-    3b8290e81e70b62b635fba12fab45640|}]
+    3946a1fbac1c6cbc449a31b671a2e368|}]
