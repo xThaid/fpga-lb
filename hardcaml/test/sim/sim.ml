@@ -27,7 +27,7 @@ module Sim (S : S) = struct
     ; sim : (Bits.t ref S.I.t, Bits.t ref S.O.t) Cyclesim.t
     }
 
-  let create ~name ?(gtkwave = false) ?(verilator = false) ?(trace = false) () = 
+  let create ~name ?(gtkwave = false) ?gtkwave_name ?(verilator = false) ?(trace = false) () = 
     let module CSim = Cyclesim.With_interface (S.I)(S.O) in
     let module VSim = Hardcaml_verilator.With_interface (S.I)(S.O) in
 
@@ -41,8 +41,13 @@ module Sim (S : S) = struct
         CSim.create ~config:(Cyclesim.Config.trace trace) create_fn
     in
 
+    let gtkwave_name = match gtkwave_name with
+      | None -> name
+      | Some name -> name
+    in
+
     let sim = if gtkwave then
-       Vcd.Gtkwave.gtkwave ~args:("--save=../../../test/res/" ^ name ^ ".gtkw") sim
+       Vcd.Gtkwave.gtkwave ~args:("--save=../../../test/res/" ^ gtkwave_name ^ ".gtkw") sim
     else
       sim
     in

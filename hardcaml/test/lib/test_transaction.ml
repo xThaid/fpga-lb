@@ -12,6 +12,46 @@ module TestData = struct
   [@@deriving sexp_of, hardcaml]
 end
 
+module TestDataAligned = struct 
+  type 'a t =
+    { field1 : 'a [@bits 48]
+    ; field2 : 'a [@bits 8]
+    ; field3 : 'a [@bits 16]
+    ; field4 : 'a [@bits 24]
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
+module TransactionConsumer (Data : Interface.S) = struct
+  module Transaction = Transaction.Make(Data)
+
+  type t =
+    { mutable consumed : string Data.t list 
+    ; mutable enabled : bool
+    ; tst_s : Bits.t ref Transaction.Src.t
+    ; tst_d : Bits.t ref Transaction.Dst.t
+    }
+
+  let create tst_s tst_d = 
+    { consumed = []
+    ; enabled = true
+    ; tst_s
+    ; tst_d
+    }
+
+  let comb t =
+    t.tst_d.ready := Bits.of_bool t.enabled
+
+  let seq t =
+    if (Bits.to_bool !(t.tst_s.valid)) && t.enabled then
+        t.consumed <- (Data.map t.tst_s.data ~f:(fun x -> Bits.to_constant !x |> Constant.to_hex_string ~signedness:Unsigned)) :: t.consumed
+
+  let expect_reads t = 
+    let consumed = List.rev t.consumed in
+    Stdio.print_s [%message (consumed : string Data.t list)]
+
+end
+
 module SerializerSim (Data : Interface.S) = struct
   module Serializer = Transaction.Serializer(Data)
   module Transaction = Transaction.Make(Data)
@@ -66,21 +106,21 @@ let%expect_test "transaction_serializer" =
   inputs.tst.data.field2 := (Bits.of_hex ~width:8 "f6");
   inputs.tst.data.field3 := (Bits.of_hex ~width:16 "f7f8");
 
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 2;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 1;
   inputs.tst.valid := Bits.vdd;
   Sim.cycle_n sim 1;
   inputs.tst.valid := Bits.gnd;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 1;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 1;
-  consumer.enable := true;
+  consumer.enable <- true;
 
   inputs.tst.data.field2 := (Bits.of_hex ~width:8 "a6");
   inputs.tst.valid := Bits.vdd;
@@ -98,3 +138,149 @@ let%expect_test "transaction_serializer" =
     f0f1f2f3 f4f5a6f7 f8
 
     546bd74e9554515f4c427ff9f212ad57|}]
+
+let%expect_test "transaction_serializer_aligned" =
+  let module SerializerSim = SerializerSim(TestDataAligned) in
+  let module Sim = Sim.Sim(SerializerSim) in
+  
+  let sim = Sim.create ~name:"transaction_serializer_aligned" ~gtkwave_name:"transaction_serializer" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
+
+  Sim.add_element sim (module FlowConsumer) consumer;
+
+  inputs.tst.data.field1 := (Bits.of_hex ~width:48 "f0f1f2f3f4f5");
+  inputs.tst.data.field2 := (Bits.of_hex ~width:8 "f6");
+  inputs.tst.data.field3 := (Bits.of_hex ~width:16 "f7f8");
+  inputs.tst.data.field4 := (Bits.of_hex ~width:24 "f7f8f9");
+
+  consumer.enable <- false;
+  Sim.cycle_n sim 2;
+  consumer.enable <- true;
+  Sim.cycle_n sim 1;
+  inputs.tst.valid := Bits.vdd;
+  Sim.cycle_n sim 1;
+  inputs.tst.valid := Bits.gnd;
+  Sim.cycle_n sim 1;
+  consumer.enable <- false;
+  Sim.cycle_n sim 1;
+  consumer.enable <- true;
+  Sim.cycle_n sim 1;
+  consumer.enable <- false;
+  Sim.cycle_n sim 1;
+  consumer.enable <- true;
+
+  inputs.tst.data.field2 := (Bits.of_hex ~width:8 "a6");
+  inputs.tst.valid := Bits.vdd;
+  Sim.cycle_n sim 2;
+  inputs.tst.valid := Bits.gnd;
+
+  Sim.cycle_n sim 10;
+
+  FlowConsumer.expect_data consumer;
+  Sim.expect_trace_digest sim;
+
+  [%expect {|
+    f0f1f2f3 f4f5f6f7 f8f7f8f9
+
+    f0f1f2f3 f4f5a6f7 f8f7f8f9
+
+    4ef8d54e9f727ffdfedb1d2d8044c508|}]
+
+
+module DeserializerSim (Data : Interface.S) = struct
+  module Serializer = Transaction.Serializer(Data)
+  module Transaction = Transaction.Make(Data)
+
+  module I = struct
+    type 'a t =
+        { clock : 'a
+        ; reset : 'a
+        ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
+        ; tst : 'a Transaction.Dst.t [@rtlprefix "tst_"]
+        }
+    [@@deriving sexp_of, hardcaml]
+  end
+  
+  module O = struct
+    type 'a t =
+      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
+      ; tst : 'a Transaction.Src.t [@rtlprefix "tst_"]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
+    let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
+
+    let source = Flow.create i.source_tx (Flow.Dest.Of_signal.wires ()) in
+
+    let tst = Serializer.deserialize spec source in
+    Signal.(tst.d.ready <== i.tst.ready);
+
+    {O.source_rx = source.dst; tst = tst.s}
+
+end
+
+let%expect_test "transaction_deserializer" =
+  let module DeserializerSim = DeserializerSim(TestData) in
+  let module Sim = Sim.Sim(DeserializerSim) in
+  let module Consumer = TransactionConsumer(TestData) in
+  
+  let sim = Sim.create ~name:"transaction_deserializer" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
+  let consumer = Consumer.create outputs.tst inputs.tst in
+
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module Consumer) consumer;
+
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 13);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:32 9);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:48 9);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:64 9);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:80 9);
+
+  emitter.enable <- true;
+
+  Sim.cycle_n sim 4;
+
+  emitter.enable <- false;
+  Sim.cycle_n sim 2;
+  emitter.enable <- true;
+  Sim.cycle_n sim 1;
+  emitter.enable <- false;
+  Sim.cycle_n sim 1;
+  emitter.enable <- true;
+  Sim.cycle_n sim 2;
+  consumer.enabled <- false;
+  Sim.cycle_n sim 1;
+  emitter.enable <- false;
+  Sim.cycle_n sim 2;
+  consumer.enabled <- true;
+  Sim.cycle_n sim 3;
+  emitter.enable <- true;
+  Sim.cycle_n sim 4;
+  consumer.enabled <- false;
+  Sim.cycle_n sim 3;
+  consumer.enabled <- true;
+
+  Sim.cycle_n sim 10;
+
+  Consumer.expect_reads consumer;
+  Sim.expect_trace_digest sim;
+
+  [%expect {|
+    (consumed
+     (((field1 05060708090a) (field2 0b) (field3 0c0d))
+      ((field1 202122232425) (field2 26) (field3 2728))
+      ((field1 303132333435) (field2 36) (field3 3738))
+      ((field1 404142434445) (field2 46) (field3 4748))
+      ((field1 505152535455) (field2 56) (field3 5758))))
+    20e84cdbc0afdadb46f0349e6936847d|}]

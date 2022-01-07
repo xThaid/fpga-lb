@@ -1,0 +1,35 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Fri Jan  7 17:35:44 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/transaction_deserializer.gtkw"
+[timestart] 228
+[size] 1767 694
+[pos] -1 -1
+*-4.000000 230 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 265
+[sst_expanded] 1
+[sst_vpaned_height] 176
+@28
+inputs.clock
+@200
+-
+@22
+outputs.tst_field1[47:0]
+outputs.tst_field2[7:0]
+outputs.tst_field3[15:0]
+@28
+outputs.tst_valid
+inputs.tst_ready
+@200
+-
+@23
+inputs.source_data[31:0]
+@28
+inputs.source_last
+inputs.source_valid
+outputs.source_ready
+[pattern_trace] 1
+[pattern_trace] 0

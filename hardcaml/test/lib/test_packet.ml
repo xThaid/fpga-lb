@@ -81,36 +81,36 @@ let%expect_test "packetizer_full_unaligned" =
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 28);
 
-  emitter.enable := false;
+  emitter.enable <- false;
 
-  consumer.enable := false;
+  consumer.enable <- false;
 
   Sim.cycle_n sim 2;
-  emitter.enable := true;
+  emitter.enable <- true;
   Sim.cycle_n sim 2;
-  emitter.enable := false;
+  emitter.enable <- false;
   Sim.cycle_n sim 2;
-  emitter.enable := true;
+  emitter.enable <- true;
   Sim.cycle_n sim 3;
 
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 3;
 
-  emitter.enable := false;
+  emitter.enable <- false;
   Sim.cycle_n sim 1;
-  emitter.enable := true;
+  emitter.enable <- true;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 5;
 
   Sim.cycle_n sim 2;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 7;
 
   Sim.cycle_n sim 9;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 5;
-  consumer.enable := true;
+  consumer.enable <- true;
 
   Sim.cycle_n sim 20;
 
@@ -148,9 +148,9 @@ let%expect_test "packetizer_full_fast_unaligned" =
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:100 44);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
 
-  emitter.enable := true;
+  emitter.enable <- true;
 
-  consumer.enable := true;
+  consumer.enable <- true;
 
   Sim.cycle_n sim 45;
 
@@ -232,35 +232,35 @@ let%expect_test "depacketizer_unaligned" =
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 28);
 
-  emitter.enable := false;
+  emitter.enable <- false;
   inputs.header.ready := Bits.vdd;
-  consumer.enable := false;
+  consumer.enable <- false;
 
   Sim.cycle_n sim 2;
-  emitter.enable := true;
+  emitter.enable <- true;
   Sim.cycle_n sim 2;
-  emitter.enable := false;
+  emitter.enable <- false;
   Sim.cycle_n sim 2;
-  emitter.enable := true;
+  emitter.enable <- true;
   Sim.cycle_n sim 3;
 
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 3;
 
-  emitter.enable := false;
+  emitter.enable <- false;
   Sim.cycle_n sim 1;
-  emitter.enable := true;
+  emitter.enable <- true;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
 
   Sim.cycle_n sim 2;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 7;
 
   Sim.cycle_n sim 9;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 5;
-  consumer.enable := true;
+  consumer.enable <- true;
 
   Sim.cycle_n sim 10;
 
@@ -345,7 +345,7 @@ let%expect_test "packetizer_unaligned" =
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 24);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 24);
 
-  emitter.enable := false;
+  emitter.enable <- false;
 
   inputs.header.data.field1 := (Bits.of_hex ~width:48 "f0f1f2f3f4f5");
   inputs.header.data.field2 := (Bits.of_hex ~width:8 "f6");
@@ -354,9 +354,9 @@ let%expect_test "packetizer_unaligned" =
   Sim.cycle_n sim 2;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 2;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 1;
-  emitter.enable := true;
+  emitter.enable <- true;
   inputs.header.valid := Bits.gnd;
   Sim.cycle_n sim 7;
   inputs.header.valid := Bits.vdd;
@@ -365,23 +365,23 @@ let%expect_test "packetizer_unaligned" =
   Sim.cycle_n sim 1;
   inputs.header.valid := Bits.gnd;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 1;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 2;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 1;
-  consumer.enable := false;
+  consumer.enable <- false;
   Sim.cycle_n sim 1;
-  consumer.enable := true;
+  consumer.enable <- true;
   Sim.cycle_n sim 5;
 
-  emitter.enable := false;
+  emitter.enable <- false;
   inputs.header.valid := Bits.vdd;
   Sim.cycle_n sim 6;
-  emitter.enable := true;
+  emitter.enable <- true;
 
   Sim.cycle_n sim 20;
 
