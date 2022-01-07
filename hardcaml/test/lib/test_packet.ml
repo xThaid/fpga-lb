@@ -13,8 +13,8 @@ module TestHeader = struct
 end
 
 module PacketizerFullSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(HeaderData)
   module Packetizer = Packet.Packetizer(HeaderData)
+  module Header = Packetizer.Header 
 
   module I = struct
     type 'a t =
@@ -167,8 +167,8 @@ let%expect_test "packetizer_full_fast_unaligned" =
     11121314 15161718 191a1b1c 1d |}]
 
 module DepacketizerSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(HeaderData)
   module Packetizer = Packet.Packetizer(HeaderData)
+  module Header = Packetizer.Header
 
   module I = struct
     type 'a t =
@@ -279,95 +279,9 @@ let%expect_test "depacketizer_unaligned" =
 
     cba058f9993f6bb657c1f31a18ba349a|}]
 
-
-module HeaderDisassembleSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(HeaderData)
-  module Packetizer = Packet.Packetizer(HeaderData)
-
-  module I = struct
-    type 'a t =
-        { clock : 'a
-        ; reset : 'a
-        ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
-        ; header : 'a Header.t [@rtl_prefix "hdr_"]
-        }
-    [@@deriving sexp_of, hardcaml]
-  end
-  
-  module O = struct
-    type 'a t =
-      { sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
-      }
-    [@@deriving sexp_of, hardcaml]
-  end
-
-  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
-    let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
-
-    let sink_rx = Flow.Source.Of_signal.wires () in
-
-    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
-
-    Flow.Endpoint.connect sink (Packetizer.header_disassemble spec ~hdr:i.header);
-    
-    {O.sink_rx = sink.src;}
-
-end
-
-let%expect_test "header_disassemble" =
-  let module HeaderDisassembleSim = HeaderDisassembleSim(TestHeader) in
-  let module Sim = Sim.Sim(HeaderDisassembleSim) in
-  
-  let sim = Sim.create ~name:"header_disassemble" ~gtkwave:false () in
-
-  let inputs = Sim.inputs sim in
-  let outputs = Sim.outputs sim in
-
-  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
-
-  Sim.add_element sim (module FlowConsumer) consumer;
-
-  inputs.header.data.field1 := (Bits.of_hex ~width:48 "f0f1f2f3f4f5");
-  inputs.header.data.field2 := (Bits.of_hex ~width:8 "f6");
-  inputs.header.data.field3 := (Bits.of_hex ~width:16 "f7f8");
-
-  consumer.enable := false;
-  Sim.cycle_n sim 2;
-  consumer.enable := true;
-  Sim.cycle_n sim 1;
-  inputs.header.valid := Bits.vdd;
-  Sim.cycle_n sim 1;
-  inputs.header.valid := Bits.gnd;
-  Sim.cycle_n sim 1;
-  consumer.enable := false;
-  Sim.cycle_n sim 1;
-  consumer.enable := true;
-  Sim.cycle_n sim 1;
-  consumer.enable := false;
-  Sim.cycle_n sim 1;
-  consumer.enable := true;
-
-  inputs.header.data.field2 := (Bits.of_hex ~width:8 "a6");
-  inputs.header.valid := Bits.vdd;
-  Sim.cycle_n sim 1;
-  inputs.header.valid := Bits.gnd;
-
-  Sim.cycle_n sim 10;
-
-  FlowConsumer.expect_data consumer;
-  Sim.expect_trace_digest sim;
-
-  [%expect {|
-    f0f1f2f3 f4f5f6f7 f8
-
-    f0f1f2f3 f4f5a6f7 f8
-
-    3b8290e81e70b62b635fba12fab45640|}]
-
-
 module PacketizerSim (HeaderData : Interface.S) = struct
-  module Header = Packet.Header(HeaderData)
   module Packetizer = Packet.Packetizer(HeaderData)
+  module Header = Packetizer.Header 
 
   module I = struct
     type 'a t =

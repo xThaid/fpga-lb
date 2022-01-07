@@ -10,9 +10,6 @@ module Source = struct
     ; empty : 'a [@bits 2]
     }
   [@@deriving sexp_of, hardcaml]
-
-  let data_width = port_widths.data
-  let empty_width = port_widths.empty
 end
 
 module Dest = struct 
@@ -23,10 +20,13 @@ module Dest = struct
 end
 
 module Endpoint = struct 
-  type 'a t = 
-  { src : 'a Source.t
-  ; dst : 'a Dest.t
+  type t = 
+  { src : Signal.t Source.t
+  ; dst : Signal.t Dest.t
   }
+
+  let word_width = Source.port_widths.data
+  let empty_width = Source.port_widths.empty
 
   let create src dst = 
     { src;
@@ -43,7 +43,7 @@ module Endpoint = struct
     Dest.Of_signal.assign f2.dst f1.dst
 
   (* bufferize cuts Flow.Source paths (valid/last/data/empty). As the result, it reduces read latency from 1 to 0. *)
-  let bufferize reg_spec (source : 'a t) =
+  let bufferize reg_spec (source : t) =
     let open Signal in
 
     let module BufferData = struct
@@ -76,7 +76,7 @@ module Endpoint = struct
 
     sink
 
-  let shifter ~shift reg_spec (source : 'a t) = 
+  let shifter ~shift reg_spec (source : t) = 
     let open Signal in
 
     if shift = 0 then
@@ -85,7 +85,7 @@ module Endpoint = struct
 
     let shifted = Source.Of_signal.wires () in
 
-    let shift_remainder = Source.data_width / 8 - shift in
+    let shift_remainder = word_width / 8 - shift in
 
     let shifted_source = Source.Of_always.wire zero in
     let shifted_ready_next = Always.Variable.wire ~default:gnd in
@@ -112,12 +112,12 @@ module Endpoint = struct
       shifted_source.data <-- concat_msb [sel_bottom saved_transfer.data (shift_remainder * 8); sel_top source.src.data (shift * 8)];
       if_ extra_transfer.value [
         shifted_source.valid <-- vdd;
-        shifted_source.empty <-- saved_transfer.empty -: (of_int ~width:Source.empty_width shift_remainder);
+        shifted_source.empty <-- saved_transfer.empty -: (of_int ~width:empty_width shift_remainder);
         shifted_source.last <-- vdd;
         shifted_ready_next <-- source.dst.ready
       ] [
         shifted_source.valid <-- source.src.valid;
-        shifted_source.empty <-- mux2 (source.src.empty <=:. shift_remainder) (zero Source.empty_width) (source.src.empty -:. shift_remainder);
+        shifted_source.empty <-- mux2 (source.src.empty <=:. shift_remainder) (zero empty_width) (source.src.empty -:. shift_remainder);
         shifted_source.last <-- (source.src.last &: ((~:) will_require_extra_transfer));
         shifted_ready_next <-- (~:) (valid_transfer &: source.src.last &: will_require_extra_transfer)
       ]
@@ -128,10 +128,10 @@ module Endpoint = struct
     shifted, shifted_ready_next.value
 
   (* Sources must have read latency equal to 0. Sink has ready latency 1 *)
-  let join spec ~shift ~(source1 : 'a t) ~(source2 : 'a t) =
+  let join spec ~shift ~(source1 : t) ~(source2 : t) =
     let open Signal in
 
-    let shift_compl = ((Source.data_width - (shift * 8) % Source.data_width) % Source.data_width) / 8 in
+    let shift_compl = ((word_width - (shift * 8) % word_width) % word_width) / 8 in
 
     let sink = create_empty () in
     let sink_ready_d = reg spec sink.dst.ready in
@@ -141,7 +141,7 @@ module Endpoint = struct
     let source1_ready_next = Always.Variable.reg ~width:1 spec in
     let source2_ready_next = Always.Variable.reg ~width:1 spec in
 
-    let source1_last_data = Always.Variable.reg ~width:Source.data_width spec in
+    let source1_last_data = Always.Variable.reg ~width:word_width spec in
     
     let sink_src = Source.Of_always.wire zero in
 
@@ -181,7 +181,7 @@ module Endpoint = struct
       Transition, [
         source2_ready_next <-- sink.dst.ready;
 
-        sink_src.data <-- (concat_msb [sel_top source1_last_data.value (shift * 8); sel_top source2.src.data (Source.data_width - shift * 8)]);
+        sink_src.data <-- (concat_msb [sel_top source1_last_data.value (shift * 8); sel_top source2.src.data (word_width - shift * 8)]);
         sink_src.valid <-- source2.src.valid;
 
         when_ (sink_ready_d &: source2.src.valid) [
@@ -212,12 +212,12 @@ module Endpoint = struct
     sink
 
   (* Source must have read latency 0. Sinks have ready latency 1. *)
-  let split spec ~hdr_length ~(source : 'a t) =
+  let split spec ~hdr_length ~(source : t) =
     let open Signal in
 
-    let header_leftover = hdr_length % Source.data_width in
-    let header_words = (hdr_length + Source.data_width - 1) / Source.data_width in
-    let empty_cnt = ((Source.data_width - hdr_length % Source.data_width) % Source.data_width) / 8 in
+    let header_leftover = hdr_length % word_width in
+    let header_words = (hdr_length + word_width - 1) / word_width in
+    let empty_cnt = ((word_width - hdr_length % word_width) % word_width) / 8 in
 
     let sink1 = create_empty () in
     let sink2 = create_empty () in
@@ -276,7 +276,7 @@ module Endpoint = struct
 
     sink1.src.data <== source.src.data;
     sink1.src.last <== (hdr_word_counter.value ==:. header_words - 1);
-    sink1.src.empty <== (mux2 sink1.src.last (of_int ~width:Source.empty_width empty_cnt) (zero Source.empty_width));
+    sink1.src.empty <== (mux2 sink1.src.last (of_int ~width:empty_width empty_cnt) (zero empty_width));
     sink1.src.valid <== sink1_valid.value;
 
     sink2.src.data <== shifted_source.data;
