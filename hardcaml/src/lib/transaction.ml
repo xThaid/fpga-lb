@@ -25,11 +25,6 @@ module Transaction (Data : Interface.S) = struct
   let create s d = {s; d}
   let create_empty () = create (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
-  (*
-  let is_fire t = Signal.(t.valid &: t.ready)
-  let is_stall t = Signal.(t.valid &: ~:(t.ready))
-  *)
-
   let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
 end
 
@@ -50,43 +45,53 @@ module Serializer (Data : Interface.S) = struct
 
     let data_word_counter = Always.Variable.reg ~width:(num_bits_to_represent data_words) spec in
 
-    let busy = Always.Variable.reg ~width:1 spec in
+    let ready_next = Always.Variable.reg ~width:1 spec in
 
     let flow_src = Flow.Source.Of_signal.wires () in
     let flow_dst = Flow.Dest.Of_signal.wires () in
 
-    let latch_data () = Always.(proc [
-      data_word_counter <--. 0;
-      data_buf <-- (if empty_cnt = 0 then data_packed else (concat_msb [data_packed; zero (empty_cnt * 8)]));
-    ]) in
+    let module SM = struct
+      type t =
+        | Idle
+        | Write
+      [@@deriving sexp_of, compare, enumerate]
+    end
+    in
+
+    let sm = Always.State_machine.create (module SM) ~enable:vdd spec in
 
     Always.(compile [
-      if_ busy.value [
+    sm.switch [
+      Idle, [
+        ready_next <--. 1;
+        data_word_counter <--. 0;
+
+        when_ tst.s.valid [
+          data_buf <-- (if empty_cnt = 0 then data_packed else (concat_msb [data_packed; zero (empty_cnt * 8)]));
+          ready_next <--. 0;
+          sm.set_next Write
+        ]
+      ];
+
+      Write, [
         when_ flow_dst.ready [
-        data_word_counter <-- data_word_counter.value +:. 1;
+          data_word_counter <-- data_word_counter.value +:. 1;
           data_buf <-- (sll data_buf.value Flow.Endpoint.word_width);
           when_ (data_word_counter.value ==:. data_words - 1) [
-            if_ tst.s.valid [
-              latch_data ();
-            ] [
-              busy <--. 0;
-            ]
+            ready_next <--. 1;
+            sm.set_next Idle;
           ];
         ]
-      ] [
-        when_ tst.s.valid [
-          latch_data ();
-          busy <--. 1;
-        ]
-      ]
+      ];
+    ]
     ]);
 
-    tst.d.ready <== vdd;
+    tst.d.ready <== ready_next.value;
 
     flow_src.data <== (sel_top data_buf.value Flow.Endpoint.word_width);
     flow_src.last <== (data_word_counter.value ==:. data_words - 1);
     flow_src.empty <== (mux2 flow_src.last (of_int ~width:Flow.Endpoint.empty_width empty_cnt) (zero Flow.Endpoint.empty_width));
-    flow_src.valid <== busy.value;
+    flow_src.valid <== sm.is Write;
 
     Flow.Endpoint.create flow_src flow_dst
 
@@ -104,26 +109,56 @@ module Serializer (Data : Interface.S) = struct
     let data_buf = Always.Variable.reg ~width:data_buf_width spec in
     let append_data_buf () = Always.(data_buf <-- ((sll data_buf.value Flow.Endpoint.word_width) |: (uresize flow.src.data data_buf_width))) in
 
-    let busy = Always.Variable.reg ~width:1 spec in
+    let ready_next = Always.Variable.wire ~default:vdd in
+
+    let module SM = struct
+      type t =
+        | Idle
+        | Read
+        | Wait
+      [@@deriving sexp_of, compare, enumerate]
+    end
+    in
+
+    let sm = Always.State_machine.create (module SM) ~enable:vdd spec in
 
     Always.(compile [
-      if_ busy.value [
+    sm.switch [
+      Idle, [
         when_ flow.src.valid [
+          append_data_buf ();
+          sm.set_next Read;
+        ]
+      ];
+
+      Read, [
+        when_ (Flow.Endpoint.is_fired flow) [
           append_data_buf ();
           when_ flow.src.last [
-            tst_valid_next <-- vdd;
-            busy <--. 0;
+            if_ tst.d.ready [
+              tst_valid_next <-- vdd;
+              sm.set_next Idle;
+            ] [
+              ready_next <--. 0;
+              sm.set_next Wait;
+            ]
           ];
         ]
-      ] [
-        when_ flow.src.valid [
-          append_data_buf ();
-          busy <--. 1;
+      ];
+
+      Wait, [
+        ready_next <--. 0;
+
+        when_ tst.d.ready [
+          tst_valid_next <-- vdd;
+          ready_next <--. 1;
+          sm.set_next Idle;
         ]
       ]
+    ];
     ]);
 
-    flow.dst.ready <== vdd;
+    flow.dst.ready <== (reg spec ready_next.value);
 
     tst.s.valid <== (reg spec tst_valid_next.value);
     Data.Of_signal.(tst.s.data <== unpack ~rev:true (sel_top data_buf.value Transaction.data_len));

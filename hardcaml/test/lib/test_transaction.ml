@@ -84,7 +84,7 @@ let%expect_test "transaction_serializer" =
 
   inputs.tst.data.field2 := (Bits.of_hex ~width:8 "a6");
   inputs.tst.valid := Bits.vdd;
-  Sim.cycle_n sim 1;
+  Sim.cycle_n sim 2;
   inputs.tst.valid := Bits.gnd;
 
   Sim.cycle_n sim 10;
@@ -97,4 +97,4 @@ let%expect_test "transaction_serializer" =
 
     f0f1f2f3 f4f5a6f7 f8
 
-    3946a1fbac1c6cbc449a31b671a2e368|}]
+    546bd74e9554515f4c427ff9f212ad57|}]

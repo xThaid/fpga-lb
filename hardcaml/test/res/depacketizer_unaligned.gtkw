@@ -1,13 +1,13 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Fri Jan  7 14:35:08 2022
+[*] Fri Jan  7 16:17:22 2022
 [*]
 [dumpfile] "(null)"
 [savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/depacketizer_unaligned.gtkw"
-[timestart] 359
+[timestart] 0
 [size] 1920 1023
 [pos] -1 -1
-*-4.000000 445 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-4.000000 83 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 247
 [signals_width] 273
 [sst_expanded] 1
@@ -37,6 +37,8 @@ outputs.hdr_field2[7:0]
 outputs.hdr_field3[15:0]
 @28
 outputs.hdr_valid
+@29
+inputs.hdr_ready
 @200
 -
 @22

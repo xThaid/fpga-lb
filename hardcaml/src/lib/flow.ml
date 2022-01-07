@@ -38,6 +38,9 @@ module Endpoint = struct
       dst = Dest.Of_signal.wires ();
     }
 
+  let is_fired t = Signal.(t.src.valid &: t.dst.ready)
+  let is_stalled t = Signal.(t.src.valid &: ~:(t.dst.ready))
+
   let connect f1 f2 =
     Source.Of_signal.assign f1.src f2.src;
     Dest.Of_signal.assign f2.dst f1.dst

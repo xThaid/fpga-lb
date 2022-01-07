@@ -52,6 +52,7 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     Flow.Endpoint.connect sink out_flow;
 
     Signal.assign hdr_transf.s.valid hdr.s.valid;
+    Signal.assign hdr.d.ready hdr_transf.d.ready;
     (* HeaderData.Of_signal.pack hdr.data |> Signal.negate |> HeaderData.Of_signal.unpack |> HeaderData.Of_signal.assign hdr_transf.data; *)
     HeaderData.Of_signal.assign hdr_transf.s.data @@ HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8");
     
@@ -232,7 +233,7 @@ let%expect_test "depacketizer_unaligned" =
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 28);
 
   emitter.enable := false;
-
+  inputs.header.ready := Bits.vdd;
   consumer.enable := false;
 
   Sim.cycle_n sim 2;
@@ -280,7 +281,7 @@ let%expect_test "depacketizer_unaligned" =
     0a0b0c0d 0e0f1011 12131415 16171819
     1a1b1c
 
-    cba058f9993f6bb657c1f31a18ba349a|}]
+    ad27b526bd51e212826b07b4d58dd844|}]
 
 module PacketizerSim (HeaderData : Interface.S) = struct
   module Packetizer = Packet.Packetizer(HeaderData)
@@ -382,7 +383,7 @@ let%expect_test "packetizer_unaligned" =
   Sim.cycle_n sim 6;
   emitter.enable := true;
 
-  Sim.cycle_n sim 15;
+  Sim.cycle_n sim 20;
 
   FlowConsumer.expect_data consumer;
   Sim.expect_trace_digest sim;
@@ -400,4 +401,4 @@ let%expect_test "packetizer_unaligned" =
     08090a0b 0c0d0e0f 10111213 14151617
     18
 
-    f97ea6af7abf48d9b0f075275d24a512|}]
+    1f3ac8a5136edb664a285382159327ce|}]
