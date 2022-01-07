@@ -72,11 +72,10 @@ module Sim (S : S) = struct
 
     elements_comb ();
     Cyclesim.cycle_before_clock_edge t.sim;
-    
+
     elements_seq ();
     Cyclesim.cycle_at_clock_edge t.sim;
 
-    elements_comb ();
     Cyclesim.cycle_after_clock_edge t.sim
 
   let cycle_n t n = 

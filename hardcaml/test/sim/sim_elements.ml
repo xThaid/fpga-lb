@@ -112,3 +112,125 @@ module FlowConsumer = struct
     List.rev !(t.transfers) |> List.iter ~f:print_transfer
 
 end
+
+module BusHost (A : Bus.Agent.S) = struct
+  type bus_query =
+    | Write of int * int
+    | Read of int
+
+  type t =
+    { bus_i : Bits.t ref A.O.t
+    ; bus_o : Bits.t ref A.I.t
+    ; queries : bus_query Linked_queue.t
+    ; mutable pending_query : bus_query Option.t
+    ; mutable responses : int list
+    ; mutable save_resp : bool
+    }
+
+  let create bus_i bus_o =
+    { bus_i
+    ; bus_o
+    ; queries = Linked_queue.create ()
+    ; pending_query = None
+    ; responses = []
+    ; save_resp = false
+    }
+
+  let comb t =
+    t.bus_o.read := Bits.gnd;
+    t.bus_o.write := Bits.gnd;
+
+    match t.pending_query with
+    | None -> ()
+    | Some (Read addr) -> (
+        t.bus_o.address := Bits.of_int ~width:A.addr_len addr;
+        t.bus_o.read := Bits.vdd;
+    )
+    | Some (Write (addr, data)) -> (
+      t.bus_o.address := Bits.of_int ~width:A.addr_len addr;
+      t.bus_o.write := Bits.vdd;
+      t.bus_o.writedata := Bits.of_int ~width:32 data;
+    )
+
+  let seq t = 
+    if t.save_resp then (
+      t.responses <- Bits.to_int !(t.bus_i.readdata) :: t.responses;
+      t.save_resp <- false;
+    );
+
+    if Bits.is_gnd !(t.bus_i.waitrequest) then (
+      (
+      match t.pending_query with
+      | Some (Read _) -> (
+          t.save_resp <- true;
+      )
+      | _ -> ()
+      );
+
+      t.pending_query <- None
+    );
+
+  t.pending_query <- if Option.is_none t.pending_query then
+      Linked_queue.dequeue t.queries
+    else(
+      t.pending_query)
+
+  let schedule_read t addr = 
+    Linked_queue.enqueue t.queries (Read addr)
+
+  let schedule_write t addr data =
+    Linked_queue.enqueue t.queries (Write (addr, data))
+
+  let expect_responses t =
+    Stdio.print_s [%message (List.rev t.responses : int list)]
+
+end
+
+module BusAgent (A : Bus.Agent.S) = struct
+  type t =
+    { mutable enabled : bool
+    ; bus_i : Bits.t ref A.I.t
+    ; bus_o : Bits.t ref A.O.t
+    ; mutable pending_data : int
+    ; on_read : int -> int
+    ; on_write : int -> int -> unit
+    ; mutable reads : int list
+    ; mutable writes : (int * int) list
+    }
+
+  let create bus_i bus_o ~on_read ~on_write =
+    { enabled = true
+    ; bus_i
+    ; bus_o
+    ; pending_data = 0
+    ; on_read
+    ; on_write
+    ; reads = []
+    ; writes = []
+    }
+
+  let on_read t addr = 
+    t.reads <- addr :: t.reads;
+    t.on_read addr
+
+  let on_write t addr data =
+    t.writes <- (addr, data) :: t.writes;
+    t.on_write addr data
+
+  let comb t =
+    t.bus_o.waitrequest := Bits.of_bool (not t.enabled);
+    t.bus_o.readdata := Bits.of_int ~width:32 t.pending_data
+  
+  let seq t =
+    let addr_int = (Bits.to_int !(t.bus_i.address)) in
+
+    if t.enabled && Bits.to_bool !(t.bus_i.write) then
+      on_write t addr_int (Bits.to_int !(t.bus_i.writedata))
+    else if t.enabled && Bits.to_bool !(t.bus_i.read) then (
+      t.pending_data <- (on_read t addr_int)
+    )
+
+  let expect_accesses t =
+    Stdio.print_s [%message (List.rev t.reads : int list) (List.rev t.writes : (int * int) list)]
+
+end

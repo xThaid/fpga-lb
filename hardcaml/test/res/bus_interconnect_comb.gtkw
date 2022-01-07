@@ -1,0 +1,67 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Fri Jan  7 08:48:37 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/bus_interconnect_comb.gtkw"
+[timestart] 0
+[size] 1877 758
+[pos] -1 -1
+*-4.000000 20 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 311
+[sst_expanded] 1
+[sst_vpaned_height] 198
+@28
+inputs.clock
+@200
+-
+@24
+inputs.host_address[3:0]
+@28
+inputs.host_read
+inputs.host_write
+@22
+inputs.host_writedata[31:0]
+@25
+outputs.host_readdata[31:0]
+@28
+outputs.host_waitrequest
+@200
+-
+-
+@24
+outputs.agent_b_address[1:0]
+@28
+outputs.agent_b_read
+outputs.agent_b_write
+@22
+outputs.agent_b_writedata[31:0]
+inputs.agent_b_readdata[31:0]
+@28
+inputs.agent_b_waitrequest
+@200
+-
+@24
+[color] 2
+outputs.agent_c_address[2:0]
+@28
+[color] 2
+outputs.agent_c_read
+[color] 2
+outputs.agent_c_write
+@22
+[color] 2
+outputs.agent_c_writedata[31:0]
+[color] 2
+inputs.agent_c_readdata[31:0]
+@28
+[color] 2
+inputs.agent_c_waitrequest
+@200
+-
+@28
+various.sel[1:0]
+various.sel_d[1:0]
+[pattern_trace] 1
+[pattern_trace] 0
