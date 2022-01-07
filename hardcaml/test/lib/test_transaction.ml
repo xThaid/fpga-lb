@@ -14,7 +14,7 @@ end
 
 module SerializerSim (Data : Interface.S) = struct
   module Serializer = Transaction.Serializer(Data)
-  module Transaction = Transaction.Transaction(Data)
+  module Transaction = Transaction.Make(Data)
 
   module I = struct
     type 'a t =
@@ -39,11 +39,11 @@ module SerializerSim (Data : Interface.S) = struct
 
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
+    let sink = Flow.create sink_rx i.sink_tx in
 
     let tst = Transaction.create i.tst (Transaction.Dst.Of_signal.wires ()) in
 
-    Flow.Endpoint.connect sink (Serializer.serialize spec tst);
+    Flow.connect sink (Serializer.serialize spec tst);
     
     {O.sink_rx = sink.src; tst = tst.d}
 

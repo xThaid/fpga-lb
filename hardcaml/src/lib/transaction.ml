@@ -1,7 +1,7 @@
 open Base
 open Hardcaml
 
-module Transaction (Data : Interface.S) = struct
+module Make (Data : Interface.S) = struct
   module Src = struct
     type 'a t =
       { valid : 'a
@@ -29,17 +29,17 @@ module Transaction (Data : Interface.S) = struct
 end
 
 module Serializer (Data : Interface.S) = struct
-  module Transaction = Transaction(Data)
+  module Transaction = Make(Data)
 
   let serialize spec (tst : Transaction.t) =
     let open Signal in
 
-    if Transaction.data_len <= Flow.Endpoint.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
+    if Transaction.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
     if Transaction.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
 
-    let empty_cnt = ((Flow.Endpoint.word_width - Transaction.data_len % Flow.Endpoint.word_width) % Flow.Endpoint.word_width) / 8 in
-    let data_words = (Transaction.data_len + Flow.Endpoint.word_width - 1) / Flow.Endpoint.word_width in
-    let data_buf_width = data_words * Flow.Endpoint.word_width in
+    let empty_cnt = ((Flow.word_width - Transaction.data_len % Flow.word_width) % Flow.word_width) / 8 in
+    let data_words = (Transaction.data_len + Flow.word_width - 1) / Flow.word_width in
+    let data_buf_width = data_words * Flow.word_width in
     let data_buf = Always.Variable.reg ~width:data_buf_width spec in
     let data_packed = Data.Of_signal.pack ~rev:true tst.s.data in
 
@@ -76,7 +76,7 @@ module Serializer (Data : Interface.S) = struct
       Write, [
         when_ flow_dst.ready [
           data_word_counter <-- data_word_counter.value +:. 1;
-          data_buf <-- (sll data_buf.value Flow.Endpoint.word_width);
+          data_buf <-- (sll data_buf.value Flow.word_width);
           when_ (data_word_counter.value ==:. data_words - 1) [
             ready_next <--. 1;
             sm.set_next Idle;
@@ -88,26 +88,26 @@ module Serializer (Data : Interface.S) = struct
 
     tst.d.ready <== ready_next.value;
 
-    flow_src.data <== (sel_top data_buf.value Flow.Endpoint.word_width);
+    flow_src.data <== (sel_top data_buf.value Flow.word_width);
     flow_src.last <== (data_word_counter.value ==:. data_words - 1);
-    flow_src.empty <== (mux2 flow_src.last (of_int ~width:Flow.Endpoint.empty_width empty_cnt) (zero Flow.Endpoint.empty_width));
+    flow_src.empty <== (mux2 flow_src.last (of_int ~width:Flow.empty_width empty_cnt) (zero Flow.empty_width));
     flow_src.valid <== sm.is Write;
 
-    Flow.Endpoint.create flow_src flow_dst
+    Flow.create flow_src flow_dst
 
-  let deserialize spec (flow : Flow.Endpoint.t) =
+  let deserialize spec (flow : Flow.t) =
     let open Signal in
 
-    if Transaction.data_len <= Flow.Endpoint.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
+    if Transaction.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
     if Transaction.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
 
     let tst = Transaction.create_empty () in
-    let data_words = (Transaction.data_len + Flow.Endpoint.word_width - 1) / Flow.Endpoint.word_width in
-    let data_buf_width = data_words * Flow.Endpoint.word_width in
+    let data_words = (Transaction.data_len + Flow.word_width - 1) / Flow.word_width in
+    let data_buf_width = data_words * Flow.word_width in
 
     let tst_valid_next = Always.Variable.wire ~default:gnd in
     let data_buf = Always.Variable.reg ~width:data_buf_width spec in
-    let append_data_buf () = Always.(data_buf <-- ((sll data_buf.value Flow.Endpoint.word_width) |: (uresize flow.src.data data_buf_width))) in
+    let append_data_buf () = Always.(data_buf <-- ((sll data_buf.value Flow.word_width) |: (uresize flow.src.data data_buf_width))) in
 
     let ready_next = Always.Variable.wire ~default:vdd in
 
@@ -132,7 +132,7 @@ module Serializer (Data : Interface.S) = struct
       ];
 
       Read, [
-        when_ (Flow.Endpoint.is_fired flow) [
+        when_ (Flow.is_fired flow) [
           append_data_buf ();
           when_ flow.src.last [
             if_ tst.d.ready [

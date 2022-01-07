@@ -40,8 +40,8 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     let source_rx = Flow.Dest.Of_signal.wires () in
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
-    let source = Flow.Endpoint.create i.source_tx source_rx in
+    let sink = Flow.create sink_rx i.sink_tx in
+    let source = Flow.create i.source_tx source_rx in
 
     let hdr, inter_flow = Packetizer.create_depacketizer spec ~source in
 
@@ -49,7 +49,7 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
 
     let out_flow = Packetizer.create_packetizer spec ~hdr:hdr_transf ~source:inter_flow in
 
-    Flow.Endpoint.connect sink out_flow;
+    Flow.connect sink out_flow;
 
     Signal.assign hdr_transf.s.valid hdr.s.valid;
     Signal.assign hdr.d.ready hdr_transf.d.ready;
@@ -197,14 +197,14 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
     let source_rx = Flow.Dest.Of_signal.wires () in
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
-    let source = Flow.Endpoint.create i.source_tx source_rx in
+    let sink = Flow.create sink_rx i.sink_tx in
+    let source = Flow.create i.source_tx source_rx in
 
     let hdr, sink2 = Packetizer.create_depacketizer spec ~source in
 
     Header.Dst.Of_signal.assign hdr.d i.header;
 
-    Flow.Endpoint.connect sink sink2;
+    Flow.connect sink sink2;
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
@@ -313,12 +313,12 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     let source_rx = Flow.Dest.Of_signal.wires () in
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.Endpoint.create sink_rx i.sink_tx in
-    let source = Flow.Endpoint.create i.source_tx source_rx in
+    let sink = Flow.create sink_rx i.sink_tx in
+    let source = Flow.create i.source_tx source_rx in
     
     let hdr = Header.create i.header (Header.Dst.Of_signal.wires ()) in
 
-    Flow.Endpoint.connect sink (Packetizer.create_packetizer spec ~hdr ~source);
+    Flow.connect sink (Packetizer.create_packetizer spec ~hdr ~source);
     
     {O.source_rx = source.dst
     ; sink_rx = sink.src
