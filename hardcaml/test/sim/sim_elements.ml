@@ -4,7 +4,7 @@ open Lb_dataplane
 
 module FlowEmitter = struct
   type t =
-    { mutable enable : bool
+    { mutable enabled : bool
     ; buff : bytes ref
     ; buff_pos : int ref
     ; transfers : bytes Linked_queue.t
@@ -29,18 +29,18 @@ module FlowEmitter = struct
     let buf_len = Bytes.length !(t.buff) in
 
     t.src.data := List.init 4 ~f:(fun i -> get_nth_byte (!(t.buff_pos) + i)) |> Bits.concat_msb;
-    t.src.valid := Bits.of_bool (!(t.buff_pos) < buf_len && t.enable);
+    t.src.valid := Bits.of_bool (!(t.buff_pos) < buf_len && t.enabled);
     t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.buff_pos) - buf_len));
     t.src.last := Bits.of_bool (4 + !(t.buff_pos) >= buf_len)
 
   let seq t =
     let buf_len = Bytes.length !(t.buff) in
 
-    if (Bits.is_vdd !(t.dst.ready)) && !(t.buff_pos) < buf_len && t.enable then
+    if (Bits.is_vdd !(t.dst.ready)) && !(t.buff_pos) < buf_len && t.enabled then
       t.buff_pos := !(t.buff_pos) + 4
 
   let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) =
-    {enable = false;
+    {enabled = false;
      buff = ref (Bytes.create 0);
      buff_pos = ref 0;
      transfers = Linked_queue.create ();
@@ -58,7 +58,7 @@ end
 
 module FlowConsumer = struct
   type t =
-  { mutable enable : bool
+  { mutable enabled : bool
   ; src : Bits.t ref Flow.Source.t
   ; dst : Bits.t ref Flow.Dest.t
   ; buff : Buffer.t
@@ -66,7 +66,7 @@ module FlowConsumer = struct
   }
 
   let comb t = 
-    t.dst.ready := Bits.of_bool t.enable
+    t.dst.ready := Bits.of_bool t.enabled
 
   let seq t =
     if Bits.is_vdd !(t.src.valid) && Bits.is_vdd !(t.dst.ready) then (
@@ -87,7 +87,7 @@ module FlowConsumer = struct
     )
 
   let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) =
-    {enable = false;
+    {enabled = false;
      src;
      dst;
      buff = Buffer.create 32;

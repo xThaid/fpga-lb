@@ -76,21 +76,21 @@ let%expect_test "transaction_serializer" =
   inputs.tst.data.field2 := (Bits.of_hex ~width:8 "f6");
   inputs.tst.data.field3 := (Bits.of_hex ~width:16 "f7f8");
 
-  consumer.enable <- false;
+  consumer.enabled <- false;
   Sim.cycle_n sim 2;
-  consumer.enable <- true;
+  consumer.enabled <- true;
   Sim.cycle_n sim 1;
   inputs.tst.valid := Bits.vdd;
   Sim.cycle_n sim 1;
   inputs.tst.valid := Bits.gnd;
   Sim.cycle_n sim 1;
-  consumer.enable <- false;
+  consumer.enabled <- false;
   Sim.cycle_n sim 1;
-  consumer.enable <- true;
+  consumer.enabled <- true;
   Sim.cycle_n sim 1;
-  consumer.enable <- false;
+  consumer.enabled <- false;
   Sim.cycle_n sim 1;
-  consumer.enable <- true;
+  consumer.enabled <- true;
 
   inputs.tst.data.field2 := (Bits.of_hex ~width:8 "a6");
   inputs.tst.valid := Bits.vdd;
@@ -127,21 +127,21 @@ let%expect_test "transaction_serializer_aligned" =
   inputs.tst.data.field3 := (Bits.of_hex ~width:16 "f7f8");
   inputs.tst.data.field4 := (Bits.of_hex ~width:24 "f7f8f9");
 
-  consumer.enable <- false;
+  consumer.enabled <- false;
   Sim.cycle_n sim 2;
-  consumer.enable <- true;
+  consumer.enabled <- true;
   Sim.cycle_n sim 1;
   inputs.tst.valid := Bits.vdd;
   Sim.cycle_n sim 1;
   inputs.tst.valid := Bits.gnd;
   Sim.cycle_n sim 1;
-  consumer.enable <- false;
+  consumer.enabled <- false;
   Sim.cycle_n sim 1;
-  consumer.enable <- true;
+  consumer.enabled <- true;
   Sim.cycle_n sim 1;
-  consumer.enable <- false;
+  consumer.enabled <- false;
   Sim.cycle_n sim 1;
-  consumer.enable <- true;
+  consumer.enabled <- true;
 
   inputs.tst.data.field2 := (Bits.of_hex ~width:8 "a6");
   inputs.tst.valid := Bits.vdd;
@@ -217,25 +217,25 @@ let%expect_test "transaction_deserializer" =
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:64 9);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:80 9);
 
-  emitter.enable <- true;
+  emitter.enabled <- true;
 
   Sim.cycle_n sim 4;
 
-  emitter.enable <- false;
+  emitter.enabled <- false;
   Sim.cycle_n sim 2;
-  emitter.enable <- true;
+  emitter.enabled <- true;
   Sim.cycle_n sim 1;
-  emitter.enable <- false;
+  emitter.enabled <- false;
   Sim.cycle_n sim 1;
-  emitter.enable <- true;
+  emitter.enabled <- true;
   Sim.cycle_n sim 2;
   consumer.enabled <- false;
   Sim.cycle_n sim 1;
-  emitter.enable <- false;
+  emitter.enabled <- false;
   Sim.cycle_n sim 2;
   consumer.enabled <- true;
   Sim.cycle_n sim 3;
-  emitter.enable <- true;
+  emitter.enabled <- true;
   Sim.cycle_n sim 4;
   consumer.enabled <- false;
   Sim.cycle_n sim 3;
@@ -338,29 +338,29 @@ let%expect_test "transaction_with_flow" =
   Emitter.add_transfer tst_emitter (create_data "((field1 505152535455) (field2 56) (field3 5758))");
 
   Sim.cycle_n sim 1;
-  flow_emitter.enable <- true;
-  flow_consumer.enable <- true;
+  flow_emitter.enabled <- true;
+  flow_consumer.enabled <- true;
 
   Sim.cycle_n sim 2;
   tst_emitter.enabled <- true;
   Sim.cycle_n sim 2;
-  flow_consumer.enable <- false;
+  flow_consumer.enabled <- false;
   Sim.cycle_n sim 2;
-  flow_consumer.enable <- true;
+  flow_consumer.enabled <- true;
   tst_consumer.enabled <- false;
   Sim.cycle_n sim 8;
   tst_consumer.enabled <- true;
   Sim.cycle_n sim 1;
-  flow_emitter.enable <- false;
+  flow_emitter.enabled <- false;
   tst_consumer.enabled <- false;
   Sim.cycle_n sim 1;
-  flow_emitter.enable <- true;
+  flow_emitter.enabled <- true;
   Sim.cycle_n sim 7;
   tst_consumer.enabled <- true;
   Sim.cycle_n sim 10;
-  flow_emitter.enable <- false;
+  flow_emitter.enabled <- false;
   Sim.cycle_n sim 2;
-  flow_emitter.enable <- true;
+  flow_emitter.enabled <- true;
 
   Sim.cycle_n sim 10;
   
