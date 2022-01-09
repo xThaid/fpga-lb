@@ -24,18 +24,12 @@ type t =
 ; dst : Signal.t Dest.t
 }
 
+let t_of_if (src : Signal.t Source.t) (dst : Signal.t Dest.t) = {src; dst}
+let if_of_t (t : t) =  t.src, t.dst
+let create_wires () = t_of_if (Source.Of_signal.wires ()) (Dest.Of_signal.wires ())
+
 let word_width = Source.port_widths.data
 let empty_width = Source.port_widths.empty
-
-let create src dst = 
-  { src;
-    dst;
-  }
-
-let create_empty () =
-  { src = Source.Of_signal.wires ();
-    dst = Dest.Of_signal.wires ();
-  }
 
 let is_fired t = Signal.(t.src.valid &: t.dst.ready)
 let is_fired_last t = Signal.((is_fired t) &: t.src.last)
@@ -61,7 +55,7 @@ let bufferize reg_spec ?(ready_ahead = true) ?(enable = Signal.vdd) (source : t)
 
   let module Buffer = Fifos.Buffer(BufferData) in
 
-  let sink = create_empty () in 
+  let sink = create_wires () in 
 
   let buffer_in = Buffer.I.Of_signal.wires () in
   buffer_in.wr_enable <== source.src.valid;
@@ -136,7 +130,7 @@ let join spec ~shift ~(source1 : t) ~(source2 : t) =
 
   let shift_compl = ((word_width - (shift * 8) % word_width) % word_width) / 8 in
 
-  let sink = create_empty () in
+  let sink = create_wires () in
   let sink_ready_d = reg spec sink.dst.ready in
 
   let shifted_source2, shifter_ready_next = shifter ~shift:shift_compl spec source2 in
@@ -222,8 +216,8 @@ let split spec ~hdr_length ~(source : t) =
   let header_words = (hdr_length + word_width - 1) / word_width in
   let empty_cnt = ((word_width - hdr_length % word_width) % word_width) / 8 in
 
-  let sink1 = create_empty () in
-  let sink2 = create_empty () in
+  let sink1 = create_wires () in
+  let sink2 = create_wires () in
 
   let sink1_ready_d = reg spec sink1.dst.ready in
   let sink2_ready_d = reg spec sink2.dst.ready in

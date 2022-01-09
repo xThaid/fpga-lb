@@ -22,10 +22,11 @@ module Make (Data : Interface.S) = struct
     ; d : Signal.t Dst.t
     }
 
-  let create s d = {s; d}
-  let create_empty () = create (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
+  let t_of_if (s : Signal.t Src.t) (d : Signal.t Dst.t) = {s; d}
+  let if_of_t (t : t) =  t.s, t.d
+  let create_wires () = t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
-  let create_from valid data = create {Src.valid; data} (Dst.Of_signal.wires ())
+  let create_from valid data = t_of_if {Src.valid; data} (Dst.Of_signal.wires ())
 
   let is_fired t = Signal.(t.s.valid &: t.d.ready)
   let is_stalled t = Signal.(t.s.valid &: ~:(t.d.ready))
@@ -98,7 +99,7 @@ module Serializer (Data : Interface.S) = struct
     flow_src.empty <== (mux2 flow_src.last (of_int ~width:Flow.empty_width empty_cnt) (zero Flow.empty_width));
     flow_src.valid <== sm.is Write;
 
-    Flow.create flow_src flow_dst
+    Flow.t_of_if flow_src flow_dst
 
   let deserialize spec (flow : Flow.t) =
     let open Signal in
@@ -106,7 +107,7 @@ module Serializer (Data : Interface.S) = struct
     if Transaction.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
     if Transaction.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
 
-    let tst = Transaction.create_empty () in
+    let tst = Transaction.create_wires () in
     let data_words = (Transaction.data_len + Flow.word_width - 1) / Flow.word_width in
     let data_buf_width = data_words * Flow.word_width in
 
@@ -197,12 +198,13 @@ module With_flow (TransData : Interface.S) = struct
     }
 
   let t_of_if (src : Signal.t Src.t) (dst : Signal.t Dst.t)= 
-    let tst = {Transaction.s = src.tst; d = dst.tst} in
-    let flow = {Flow.src = src.flow; dst = dst.flow} in
+    let tst = Transaction.t_of_if src.tst dst.tst in
+    let flow = Flow.t_of_if src.flow dst.flow in
     {tst; flow}
-
-  let if_of_t (t : t) = 
-    {Src.tst = t.tst.s; flow = t.flow.src}, {Dst.tst = t.tst.d; flow = t.flow.dst}
+  let if_of_t (t : t) =
+    let tst_s, tst_d = Transaction.if_of_t t.tst in
+    let flow_src, flow_dst = Flow.if_of_t t.flow in
+    {Src.tst = tst_s; flow = flow_src}, {Dst.tst = tst_d; flow = flow_dst}
 
   let combine spec (tst_in : Transaction.t) (flow_in : Flow.t) =
     let open Signal in

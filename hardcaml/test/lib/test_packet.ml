@@ -40,12 +40,12 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     let source_rx = Flow.Dest.Of_signal.wires () in
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.create sink_rx i.sink_tx in
-    let source = Flow.create i.source_tx source_rx in
+    let sink = Flow.t_of_if sink_rx i.sink_tx in
+    let source = Flow.t_of_if i.source_tx source_rx in
 
     let hdr, inter_flow = Packetizer.create_depacketizer spec ~source in
 
-    let hdr_transf = Header.create_empty () in
+    let hdr_transf = Header.create_wires () in
 
     let out_flow = Packetizer.create_packetizer spec ~hdr:hdr_transf ~source:inter_flow in
 
@@ -197,8 +197,8 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
     let source_rx = Flow.Dest.Of_signal.wires () in
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.create sink_rx i.sink_tx in
-    let source = Flow.create i.source_tx source_rx in
+    let sink = Flow.t_of_if sink_rx i.sink_tx in
+    let source = Flow.t_of_if i.source_tx source_rx in
 
     let hdr, sink2 = Packetizer.create_depacketizer spec ~source in
 
@@ -313,10 +313,10 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     let source_rx = Flow.Dest.Of_signal.wires () in
     let sink_rx = Flow.Source.Of_signal.wires () in
 
-    let sink = Flow.create sink_rx i.sink_tx in
-    let source = Flow.create i.source_tx source_rx in
+    let sink = Flow.t_of_if sink_rx i.sink_tx in
+    let source = Flow.t_of_if i.source_tx source_rx in
     
-    let hdr = Header.create i.header (Header.Dst.Of_signal.wires ()) in
+    let hdr = Header.t_of_if i.header (Header.Dst.Of_signal.wires ()) in
 
     Flow.connect sink (Packetizer.create_packetizer spec ~hdr ~source);
     

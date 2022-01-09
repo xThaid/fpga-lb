@@ -27,7 +27,6 @@ module ReadPort = struct
     }
 
   let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
-
   let if_of_t (t : Signal.t t) = t.i, t.o
 end
 
@@ -46,9 +45,7 @@ module WritePort = struct
     }
 
   let t_of_if (i : Signal.t I.t) = {i}
-
   let if_of_t (t : Signal.t t) = t.i
-
   let create_wires () = t_of_if (I.Of_signal.wires ())
 end
 
