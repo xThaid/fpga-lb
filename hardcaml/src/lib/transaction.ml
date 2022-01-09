@@ -175,12 +175,36 @@ end
 module With_flow (TransData : Interface.S) = struct
   module Transaction = Make(TransData)
 
+  module Src = struct
+    type 'a t =
+      { tst : 'a Transaction.Src.t
+      ; flow : 'a Flow.Source.t
+      }
+  [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+  end
+
+  module Dst = struct
+    type 'a t =
+      { tst : 'a Transaction.Dst.t
+      ; flow : 'a Flow.Dest.t
+      }
+  [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+  end
+
   type t = 
     { tst : Transaction.t
     ; flow : Flow.t
     }
 
-  let create spec (tst_in : Transaction.t) (flow_in : Flow.t) =
+  let t_of_if (src : Signal.t Src.t) (dst : Signal.t Dst.t)= 
+    let tst = {Transaction.s = src.tst; d = dst.tst} in
+    let flow = {Flow.src = src.flow; dst = dst.flow} in
+    {tst; flow}
+
+  let if_of_t (t : t) = 
+    {Src.tst = t.tst.s; flow = t.flow.src}, {Dst.tst = t.tst.d; flow = t.flow.dst}
+
+  let combine spec (tst_in : Transaction.t) (flow_in : Flow.t) =
     let open Signal in
 
     let tst_data = TransData.Of_always.reg spec in

@@ -287,7 +287,7 @@ module WithFlowSim (Data : Interface.S) = struct
 
     let source = Flow.create i.source_tx (Flow.Dest.Of_signal.wires ()) in
     let tst_in = Transaction.create i.tst_in (Transaction.Dst.Of_signal.wires ()) in
-    let combined = With_flow.create spec tst_in source in
+    let combined = With_flow.combine spec tst_in source in
 
     Transaction.Dst.Of_signal.assign combined.tst.d i.tst_out;
     Flow.Dest.Of_signal.assign combined.flow.dst i.sink_tx;

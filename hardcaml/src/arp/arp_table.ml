@@ -19,7 +19,16 @@ module ReadPort = struct
       ; error : 'a
       }
     [@@deriving sexp_of, hardcaml]
-  end  
+  end 
+
+  type 'a t = 
+    { i : 'a I.t
+    ; o : 'a O.t
+    }
+
+  let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
+
+  let if_of_t (t : Signal.t t) = t.i, t.o
 end
 
 module WritePort = struct
@@ -31,6 +40,16 @@ module WritePort = struct
       }
     [@@deriving sexp_of, hardcaml]
   end
+
+  type 'a t =
+    { i : 'a I.t
+    }
+
+  let t_of_if (i : Signal.t I.t) = {i}
+
+  let if_of_t (t : Signal.t t) = t.i
+
+  let create_wires () = t_of_if (I.Of_signal.wires ())
 end
 
 module I = struct
@@ -162,10 +181,25 @@ let create ~capacity (scope : Scope.t) (input : Signal.t I.t) =
 
   {O.query = read_port_out}
 
-let hierarchical ~capacity (scope : Scope.t) (input : Signal.t I.t) =
+let hierarchical
+      ~capacity
+      (scope : Scope.t)
+      spec
+      ~(query_port : Signal.t ReadPort.t)
+      ~(write_port : Signal.t WritePort.t) =
   let module H = Hierarchy.In_scope(I)(O) in
-  H.hierarchical ~scope ~name:"arp_table" (create ~capacity) input
 
+  let clock = Reg_spec.clock spec in
+  let clear = Reg_spec.clear spec in
+
+  let qp_i, qp_o = ReadPort.if_of_t query_port in
+  let wp_i = WritePort.if_of_t write_port in
+
+  let i = {I.clock; clear; query = qp_i; write = wp_i} in
+  let o = {O.query = qp_o} in
+
+  let o2 = H.hierarchical ~scope ~name:"arp_table" (create ~capacity) i in
+  O.Of_signal.assign o o2;
 
 module WriteBusAdapter = struct
   module Agent = Bus.Agent.Make (
