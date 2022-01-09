@@ -45,16 +45,12 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
 
     let hdr, inter_flow = Packetizer.create_depacketizer spec ~source in
 
-    let hdr_transf = Header.create_wires () in
+    let hdr_transf = Header.comb_map hdr ~f:(fun _ ->
+      HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8")
+    ) in
 
     let out_flow = Packetizer.create_packetizer spec ~hdr:hdr_transf ~source:inter_flow in
-
     Flow.connect sink out_flow;
-
-    Signal.assign hdr_transf.s.valid hdr.s.valid;
-    Signal.assign hdr.d.ready hdr_transf.d.ready;
-    (* HeaderData.Of_signal.pack hdr.data |> Signal.negate |> HeaderData.Of_signal.unpack |> HeaderData.Of_signal.assign hdr_transf.data; *)
-    HeaderData.Of_signal.assign hdr_transf.s.data @@ HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8");
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
@@ -201,14 +197,15 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
     let source = Flow.t_of_if i.source_tx source_rx in
 
     let hdr, sink2 = Packetizer.create_depacketizer spec ~source in
+    let hdr_s, hdr_d = Header.if_of_t hdr in
 
-    Header.Dst.Of_signal.assign hdr.d i.header;
+    Header.Dst.Of_signal.assign hdr_d i.header;
 
     Flow.connect sink sink2;
     
     {O.source_rx = source.dst;
       sink_rx = sink.src;
-      header = hdr.s;
+      header = hdr_s;
     }
 end
 
@@ -322,7 +319,7 @@ module PacketizerSim (HeaderData : Interface.S) = struct
     
     {O.source_rx = source.dst
     ; sink_rx = sink.src
-    ; header = hdr.d
+    ; header = Header.outputs hdr
     }
 end
 

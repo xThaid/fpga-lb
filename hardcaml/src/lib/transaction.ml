@@ -1,11 +1,52 @@
 open Base
 open Hardcaml
 
-module Make (Data : Interface.S) = struct
+module type S = sig
+  module D : Interface.S
+
+  module Src : sig
+    type 'a t =
+      { valid : 'a
+      ; data : 'a D.t
+      }
+  [@@deriving sexp_of, hardcaml]
+  end
+
+  module Dst : sig
+    type 'a t =
+      { ready : 'a
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  type t
+
+  val t_of_if : Signal.t Src.t -> Signal.t Dst.t -> t
+  val if_of_t : t -> Signal.t Src.t * Signal.t Dst.t
+  val inputs : t -> Signal.t Src.t
+  val outputs : t -> Signal.t Dst.t
+  val create_wires : unit -> t
+
+  val is_fired : t -> Signal.t
+  val is_stalled : t -> Signal.t
+  val ready : t -> Signal.t
+  val valid : t -> Signal.t
+  val data : t -> Signal.t D.t
+
+  val set_ready : t -> Signal.t -> unit
+
+  val comb_map : t -> f:(Signal.t D.t -> Signal.t D.t) -> t
+  val comb_filter : t -> f:(Signal.t D.t -> Signal.t) -> t
+  val data_len : int
+end
+
+module Make (Data : Interface.S) : (S with module D := Data) = struct
+  module D = Data
+
   module Src = struct
     type 'a t =
       { valid : 'a
-      ; data : 'a Data.t
+      ; data : 'a D.t
       }
   [@@deriving sexp_of, hardcaml]
   end
@@ -24,30 +65,42 @@ module Make (Data : Interface.S) = struct
 
   let t_of_if (s : Signal.t Src.t) (d : Signal.t Dst.t) = {s; d}
   let if_of_t (t : t) =  t.s, t.d
+  let inputs (t : t) = t.s
+  let outputs (t : t) = t.d
   let create_wires () = t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
-
-  let create_from valid data = t_of_if {Src.valid; data} (Dst.Of_signal.wires ())
 
   let is_fired t = Signal.(t.s.valid &: t.d.ready)
   let is_stalled t = Signal.(t.s.valid &: ~:(t.d.ready))
+  let ready t = t.d.ready
+  let valid t = t.s.valid
+  let data t = t.s.data
+
+  let set_ready t s = Signal.assign t.d.ready s
+
+  let comb_map t ~f =
+    t_of_if {Src.valid = t.s.valid; data = f t.s.data} t.d
+  let comb_filter t ~f =
+    let open Signal in
+    let filtered = f t.s.data in
+    t_of_if {Src.valid = t.s.valid &: filtered; data = t.s.data} {Dst.ready = t.d.ready |: filtered}
 
   let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
 end
 
 module Serializer (Data : Interface.S) = struct
-  module Transaction = Make(Data)
+  module Tst = Make(Data)
 
-  let serialize spec (tst : Transaction.t) =
+  let serialize spec (tst : Tst.t) =
     let open Signal in
 
-    if Transaction.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
-    if Transaction.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
+    if Tst.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
+    if Tst.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
 
-    let empty_cnt = ((Flow.word_width - Transaction.data_len % Flow.word_width) % Flow.word_width) / 8 in
-    let data_words = (Transaction.data_len + Flow.word_width - 1) / Flow.word_width in
+    let empty_cnt = ((Flow.word_width - Tst.data_len % Flow.word_width) % Flow.word_width) / 8 in
+    let data_words = (Tst.data_len + Flow.word_width - 1) / Flow.word_width in
     let data_buf_width = data_words * Flow.word_width in
     let data_buf = Always.Variable.reg ~width:data_buf_width spec in
-    let data_packed = Data.Of_signal.pack ~rev:true tst.s.data in
+    let data_packed = Data.Of_signal.pack ~rev:true (Tst.data tst) in
 
     let data_word_counter = Always.Variable.reg ~width:(num_bits_to_represent data_words) spec in
 
@@ -72,7 +125,7 @@ module Serializer (Data : Interface.S) = struct
         ready_next <--. 1;
         data_word_counter <--. 0;
 
-        when_ tst.s.valid [
+        when_ (Tst.valid tst) [
           data_buf <-- (if empty_cnt = 0 then data_packed else (concat_msb [data_packed; zero (empty_cnt * 8)]));
           ready_next <--. 0;
           sm.set_next Write
@@ -92,7 +145,7 @@ module Serializer (Data : Interface.S) = struct
     ]
     ]);
 
-    tst.d.ready <== ready_next.value;
+    assign (Tst.ready tst) ready_next.value;
 
     flow_src.data <== (sel_top data_buf.value Flow.word_width);
     flow_src.last <== (data_word_counter.value ==:. data_words - 1);
@@ -104,11 +157,11 @@ module Serializer (Data : Interface.S) = struct
   let deserialize spec (flow : Flow.t) =
     let open Signal in
 
-    if Transaction.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
-    if Transaction.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
+    if Tst.data_len <= Flow.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
+    if Tst.data_len % 8 <> 0 then raise_s [%message "transaction data should have length divisible by 8"];
 
-    let tst = Transaction.create_wires () in
-    let data_words = (Transaction.data_len + Flow.word_width - 1) / Flow.word_width in
+    let tst = Tst.create_wires () in
+    let data_words = (Tst.data_len + Flow.word_width - 1) / Flow.word_width in
     let data_buf_width = data_words * Flow.word_width in
 
     let tst_valid_next = Always.Variable.wire ~default:gnd in
@@ -141,7 +194,7 @@ module Serializer (Data : Interface.S) = struct
         when_ (Flow.is_fired flow) [
           append_data_buf ();
           when_ flow.src.last [
-            if_ tst.d.ready [
+            if_ (Tst.ready tst) [
               tst_valid_next <-- vdd;
               sm.set_next Idle;
             ] [
@@ -155,7 +208,7 @@ module Serializer (Data : Interface.S) = struct
       Wait, [
         ready_next <--. 0;
 
-        when_ tst.d.ready [
+        when_ (Tst.ready tst) [
           tst_valid_next <-- vdd;
           ready_next <--. 1;
           sm.set_next Idle;
@@ -166,19 +219,19 @@ module Serializer (Data : Interface.S) = struct
 
     flow.dst.ready <== (reg spec ready_next.value);
 
-    tst.s.valid <== (reg spec tst_valid_next.value);
-    Data.Of_signal.(tst.s.data <== unpack ~rev:true (sel_top data_buf.value Transaction.data_len));
+    assign (Tst.valid tst) (reg spec tst_valid_next.value);
+    Data.Of_signal.assign (Tst.data tst) (Data.Of_signal.unpack ~rev:true (sel_top data_buf.value Tst.data_len));
 
     tst
 
 end
 
-module With_flow (TransData : Interface.S) = struct
-  module Transaction = Make(TransData)
+module With_flow (Data : Interface.S) = struct
+  module Tst = Make(Data)
 
   module Src = struct
     type 'a t =
-      { tst : 'a Transaction.Src.t
+      { tst : 'a Tst.Src.t
       ; flow : 'a Flow.Source.t
       }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -186,32 +239,38 @@ module With_flow (TransData : Interface.S) = struct
 
   module Dst = struct
     type 'a t =
-      { tst : 'a Transaction.Dst.t
+      { tst : 'a Tst.Dst.t
       ; flow : 'a Flow.Dest.t
       }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
 
   type t = 
-    { tst : Transaction.t
+    { tst : Tst.t
     ; flow : Flow.t
     }
 
   let t_of_if (src : Signal.t Src.t) (dst : Signal.t Dst.t)= 
-    let tst = Transaction.t_of_if src.tst dst.tst in
+    let tst = Tst.t_of_if src.tst dst.tst in
     let flow = Flow.t_of_if src.flow dst.flow in
     {tst; flow}
   let if_of_t (t : t) =
-    let tst_s, tst_d = Transaction.if_of_t t.tst in
+    let tst_s, tst_d = Tst.if_of_t t.tst in
     let flow_src, flow_dst = Flow.if_of_t t.flow in
     {Src.tst = tst_s; flow = flow_src}, {Dst.tst = tst_d; flow = flow_dst}
 
-  let combine spec (tst_in : Transaction.t) (flow_in : Flow.t) =
+  let connect t1 t2 =
+    let i1, o1 = if_of_t t1 in
+    let i2, o2 = if_of_t t2 in
+    Src.Of_signal.assign i1 i2;
+    Dst.Of_signal.assign o2 o1
+
+  let combine spec (tst_in : Tst.t) (flow_in : Flow.t) =
     let open Signal in
 
-    let tst_data = TransData.Of_always.reg spec in
+    let tst_data = Data.Of_always.reg spec in
     let tst_valid = Always.Variable.reg ~width:1 spec in
-    let tst_out = Transaction.create_from tst_valid.value (TransData.Of_always.value tst_data) in
+    let tst_out = Tst.t_of_if {Tst.Src.valid = tst_valid.value; data = (Data.Of_always.value tst_data)} (Tst.Dst.Of_signal.wires ()) in
 
     let buffer_en = Always.Variable.reg ~width:1 spec in
     let flow_out = Flow.bufferize spec ~ready_ahead:false ~enable:buffer_en.value flow_in in
@@ -226,8 +285,8 @@ module With_flow (TransData : Interface.S) = struct
     Always.(compile [
     sm.switch [
       Idle, [
-        when_ (Transaction.is_fired tst_in) [
-          TransData.Of_always.assign tst_data tst_in.s.data;
+        when_ (Tst.is_fired tst_in) [
+          Data.Of_always.assign tst_data (Tst.data tst_in);
           tst_valid <--. 1;
           buffer_en <--. 1;
 
@@ -236,14 +295,14 @@ module With_flow (TransData : Interface.S) = struct
       ];
 
       Busy, [
-        when_ (Transaction.is_fired tst_out) [
+        when_ (Tst.is_fired tst_out) [
           tst_valid <--. 0;
         ];
 
         when_ (Flow.is_fired_last flow_out) [
           buffer_en <--. 0;
 
-          if_ (Transaction.is_fired tst_out |: ~:(tst_valid.value)) [
+          if_ (Tst.is_fired tst_out |: ~:(tst_valid.value)) [
             sm.set_next Idle;
           ] [
             sm.set_next Wait;
@@ -252,7 +311,7 @@ module With_flow (TransData : Interface.S) = struct
       ];
 
       Wait, [
-        when_ (Transaction.is_fired tst_out) [
+        when_ (Tst.is_fired tst_out) [
           tst_valid <--. 0;
           sm.set_next Idle;
         ];
@@ -260,14 +319,14 @@ module With_flow (TransData : Interface.S) = struct
     ]
     ]);
 
-    tst_in.d.ready <== sm.is Idle; (* TODO: this can be changed to reduce latency *)
+    assign (Tst.ready tst_in) (sm.is Idle); (* TODO: this can be changed to reduce latency *)
 
     {tst = tst_out; flow = flow_out}
 
   let demux spec ~(flow : t) ~sel _n =
     let open Signal in
 
-    let _sel = reg spec ~enable:flow.tst.s.valid sel in
+    let _sel = reg spec ~enable:(Tst.valid flow.tst) sel in
     ()
   
 end

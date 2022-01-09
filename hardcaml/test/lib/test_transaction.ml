@@ -55,7 +55,7 @@ module SerializerSim (Data : Interface.S) = struct
 
     Flow.connect sink (Serializer.serialize spec tst);
     
-    {O.sink_rx = sink.src; tst = tst.d}
+    {O.sink_rx = sink.src; tst = Transaction.outputs tst}
 
 end
 
@@ -189,9 +189,10 @@ module DeserializerSim (Data : Interface.S) = struct
     let source = Flow.t_of_if i.source_tx (Flow.Dest.Of_signal.wires ()) in
 
     let tst = Serializer.deserialize spec source in
-    Signal.(tst.d.ready <== i.tst.ready);
+    let tst_s, tst_d = Transaction.if_of_t tst in
+    Signal.(tst_d.ready <== i.tst.ready);
 
-    {O.source_rx = source.dst; tst = tst.s}
+    {O.source_rx = source.dst; tst = tst_s}
 
 end
 
@@ -289,13 +290,13 @@ module WithFlowSim (Data : Interface.S) = struct
     let tst_in = Transaction.t_of_if i.tst_in (Transaction.Dst.Of_signal.wires ()) in
     let combined = With_flow.combine spec tst_in source in
 
-    Transaction.Dst.Of_signal.assign combined.tst.d i.tst_out;
+    Transaction.Dst.Of_signal.assign (Transaction.outputs combined.tst) i.tst_out;
     Flow.Dest.Of_signal.assign combined.flow.dst i.sink_tx;
 
     { O.source_rx = source.dst
     ; sink_rx = combined.flow.src
-    ; tst_in = tst_in.d
-    ; tst_out = combined.tst.s;
+    ; tst_in = (Transaction.outputs tst_in)
+    ; tst_out = (Transaction.inputs combined.tst);
     }
 
 end

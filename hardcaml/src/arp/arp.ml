@@ -1,6 +1,30 @@
+open Base
 open Hardcaml
 
 module Eth_flow = Transaction.With_flow(Common.EthernetHeader)
+
+module Config = struct
+  let arp_table_capacity = 32
+  let mac_addr = "aabbccddeeff"
+  let mac_addr_bytes = Signal.of_hex ~width:48 mac_addr
+  let ip_addr = [10;100;0;0]
+  let ip_addr_bytes = List.map ip_addr ~f:(Signal.of_int ~width:8) |> Signal.concat_msb
+end
+
+module ArpPacket = struct
+  type 'a t =
+    { htype : 'a [@bits 16]
+    ; ptype : 'a [@bits 16]
+    ; hlen : 'a [@bits 8]
+    ; plen : 'a [@bits 8]
+    ; oper : 'a [@bits 16]
+    ; sha : 'a [@bits 48]
+    ; spa : 'a [@bits 32]
+    ; tha : 'a [@bits 48]
+    ; tpa : 'a [@bits 32]
+    }
+  [@@deriving sexp_of, hardcaml]
+end
 
 module I = struct
   type 'a t =
@@ -28,15 +52,37 @@ let create
       ~(rx : Eth_flow.t)
       ~(tx : Eth_flow.t)
       ~(query : Signal.t Arp_table.ReadPort.t) =
+  let module ArpSerializer = Transaction.Serializer(ArpPacket) in
+  let module EthTst = Transaction.Make(Common.EthernetHeader) in
+  let module ArpTst = Transaction.Make(ArpPacket) in
   
   let table_write = Arp_table.WritePort.create_wires () in
 
-  Arp_table.hierarchical ~capacity:32 scope spec ~query_port:query ~write_port:table_write;
-  
-  Signal.assign rx.flow.src.data Signal.vdd;
-  Signal.assign tx.flow.src.data Signal.vdd;
+  Arp_table.WritePort.I.iter2 table_write.i Arp_table.WritePort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
 
-  ()
+  Arp_table.hierarchical ~capacity:Config.arp_table_capacity scope spec ~query_port:query ~write_port:table_write;
+  
+  let arp_tst = ArpSerializer.deserialize spec rx.flow in
+
+  let arp_tst = ArpTst.comb_map arp_tst ~f:(fun pkt ->
+    { pkt with
+      oper = Signal.of_int ~width:16 2
+    ; sha = Config.mac_addr_bytes
+    ; spa = Config.ip_addr_bytes
+    ; tha = pkt.sha
+    ; tpa = pkt.spa
+    }
+  ) in
+
+  let eth_tst = EthTst.comb_map rx.tst ~f:(fun hdr ->
+    { hdr with
+      dest_mac = hdr.src_mac
+    ; src_mac = Config.mac_addr_bytes
+    }
+  ) in
+
+  let flow_out = Eth_flow.combine spec eth_tst (ArpSerializer.serialize spec arp_tst) in
+  Eth_flow.connect tx flow_out
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
