@@ -1,0 +1,68 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Sun Jan  9 17:48:05 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/transaction_with_flow.gtkw"
+[timestart] 316
+[size] 1920 1023
+[pos] -1 -1
+*-4.000000 377 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 301
+[sst_expanded] 1
+[sst_vpaned_height] 290
+@28
+inputs.clock
+@200
+-
+-
+@22
+inputs.source_data[31:0]
+@28
+inputs.source_empty[1:0]
+inputs.source_last
+inputs.source_valid
+outputs.source_ready
+@200
+-
+@22
+[color] 1
+inputs.tstin_field1[47:0]
+[color] 1
+inputs.tstin_field2[7:0]
+[color] 1
+inputs.tstin_field3[15:0]
+@28
+[color] 1
+inputs.tstin_valid
+[color] 1
+outputs.tstin_ready
+@200
+-
+-
+@22
+outputs.sink_data[31:0]
+@28
+outputs.sink_empty[1:0]
+outputs.sink_last
+outputs.sink_valid
+inputs.sink_ready
+@200
+-
+@22
+[color] 1
+outputs.tstout_field1[47:0]
+[color] 1
+outputs.tstout_field2[7:0]
+[color] 1
+outputs.tstout_field3[15:0]
+@28
+[color] 1
+outputs.tstout_valid
+[color] 1
+inputs.tstout_ready
+@200
+-
+[pattern_trace] 1
+[pattern_trace] 0

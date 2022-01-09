@@ -38,14 +38,15 @@ let create_empty () =
   }
 
 let is_fired t = Signal.(t.src.valid &: t.dst.ready)
+let is_fired_last t = Signal.((is_fired t) &: t.src.last)
 let is_stalled t = Signal.(t.src.valid &: ~:(t.dst.ready))
 
 let connect f1 f2 =
   Source.Of_signal.assign f1.src f2.src;
   Dest.Of_signal.assign f2.dst f1.dst
 
-(* bufferize cuts Flow.Source paths (valid/last/data/empty). As the result, it reduces read latency from 1 to 0. *)
-let bufferize reg_spec (source : t) =
+(* bufferize cuts Flow.Source paths (valid/last/data/empty). Optionally, it can cut ready path as well. *)
+let bufferize reg_spec ?(ready_ahead = true) ?(enable = Signal.vdd) (source : t) =
   let open Signal in
 
   let module BufferData = struct
@@ -64,14 +65,14 @@ let bufferize reg_spec (source : t) =
 
   let buffer_in = Buffer.I.Of_signal.wires () in
   buffer_in.wr_enable <== source.src.valid;
-  buffer_in.rd_enable <== sink.dst.ready;
+  buffer_in.rd_enable <== (sink.dst.ready &: enable);
   buffer_in.wr_data.data <== source.src.data;
   buffer_in.wr_data.empty <== source.src.empty;
   buffer_in.wr_data.last <== source.src.last;
 
   let buffer_out = Buffer.create reg_spec buffer_in in
-  source.dst.ready <== buffer_out.ready_next;
-  sink.src.valid <== buffer_out.rd_valid;
+  source.dst.ready <== (if ready_ahead then buffer_out.ready_next else buffer_out.ready);
+  sink.src.valid <== (buffer_out.rd_valid &: enable);
   sink.src.data <== buffer_out.rd_data.data;
   sink.src.last <== buffer_out.rd_data.last;
   sink.src.empty <== buffer_out.rd_data.empty;

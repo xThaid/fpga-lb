@@ -9,7 +9,7 @@ module TestData = struct
     ; field2 : 'a [@bits 8]
     ; field3 : 'a [@bits 16]
     }
-  [@@deriving sexp_of, hardcaml]
+  [@@deriving sexp_of, sexp, hardcaml]
 end
 
 module TestDataAligned = struct 
@@ -20,36 +20,6 @@ module TestDataAligned = struct
     ; field4 : 'a [@bits 24]
     }
   [@@deriving sexp_of, hardcaml]
-end
-
-module TransactionConsumer (Data : Interface.S) = struct
-  module Transaction = Transaction.Make(Data)
-
-  type t =
-    { mutable consumed : string Data.t list 
-    ; mutable enabled : bool
-    ; tst_s : Bits.t ref Transaction.Src.t
-    ; tst_d : Bits.t ref Transaction.Dst.t
-    }
-
-  let create tst_s tst_d = 
-    { consumed = []
-    ; enabled = true
-    ; tst_s
-    ; tst_d
-    }
-
-  let comb t =
-    t.tst_d.ready := Bits.of_bool t.enabled
-
-  let seq t =
-    if (Bits.to_bool !(t.tst_s.valid)) && t.enabled then
-        t.consumed <- (Data.map t.tst_s.data ~f:(fun x -> Bits.to_constant !x |> Constant.to_hex_string ~signedness:Unsigned)) :: t.consumed
-
-  let expect_reads t = 
-    let consumed = List.rev t.consumed in
-    Stdio.print_s [%message (consumed : string Data.t list)]
-
 end
 
 module SerializerSim (Data : Interface.S) = struct
@@ -284,3 +254,139 @@ let%expect_test "transaction_deserializer" =
       ((field1 404142434445) (field2 46) (field3 4748))
       ((field1 505152535455) (field2 56) (field3 5758))))
     20e84cdbc0afdadb46f0349e6936847d|}]
+
+
+module WithFlowSim (Data : Interface.S) = struct
+  module With_flow = Transaction.With_flow(Data)
+  module Transaction = Transaction.Make(Data)
+
+  module I = struct
+    type 'a t =
+        { clock : 'a
+        ; reset : 'a
+        ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
+        ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+        ; tst_in : 'a Transaction.Src.t [@rtlprefix "tstin_"]
+        ; tst_out : 'a Transaction.Dst.t [@rtlprefix "tstout_"]
+        }
+    [@@deriving sexp_of, hardcaml]
+  end
+  
+  module O = struct
+    type 'a t =
+      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      ; tst_in : 'a Transaction.Dst.t [@rtlprefix "tstin_"]
+      ; tst_out : 'a Transaction.Src.t [@rtlprefix "tstout_"]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
+    let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
+
+    let source = Flow.create i.source_tx (Flow.Dest.Of_signal.wires ()) in
+    let tst_in = Transaction.create i.tst_in (Transaction.Dst.Of_signal.wires ()) in
+    let combined = With_flow.create spec tst_in source in
+
+    Transaction.Dst.Of_signal.assign combined.tst.d i.tst_out;
+    Flow.Dest.Of_signal.assign combined.flow.dst i.sink_tx;
+
+    { O.source_rx = source.dst
+    ; sink_rx = combined.flow.src
+    ; tst_in = tst_in.d
+    ; tst_out = combined.tst.s;
+    }
+
+end
+    
+let%expect_test "transaction_with_flow" =
+  let module WithFlowSim = WithFlowSim(TestData) in
+  let module Sim = Sim.Sim(WithFlowSim) in
+  let module Emitter = TransactionEmitter(TestData) in
+  let module Consumer = TransactionConsumer(TestData) in
+  
+  let sim = Sim.create ~name:"transaction_with_flow" ~gtkwave:false () ~trace:false in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let flow_emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
+  let flow_consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
+
+  let tst_emitter = Emitter.create inputs.tst_in outputs.tst_in in
+  let tst_consumer = Consumer.create outputs.tst_out inputs.tst_out in
+
+  Sim.add_element sim (module FlowEmitter) flow_emitter;
+  Sim.add_element sim (module FlowConsumer) flow_consumer;
+
+  Sim.add_element sim (module Emitter) tst_emitter;
+  Sim.add_element sim (module Consumer) tst_consumer;
+
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer 21);
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:32 9);
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:48 18);
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:80 33);
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:128 16);
+
+  let create_data data = TestData.t_of_sexp String.t_of_sexp (Parsexp.Single.parse_string_exn data) in
+
+  Emitter.add_transfer tst_emitter (create_data "((field1 05060708090a) (field2 0b) (field3 0c0d))");
+  Emitter.add_transfer tst_emitter (create_data "((field1 202122232425) (field2 26) (field3 2728))");
+  Emitter.add_transfer tst_emitter (create_data "((field1 303132333435) (field2 36) (field3 3738))");
+  Emitter.add_transfer tst_emitter (create_data "((field1 404142434445) (field2 46) (field3 4748))");
+  Emitter.add_transfer tst_emitter (create_data "((field1 505152535455) (field2 56) (field3 5758))");
+
+  Sim.cycle_n sim 1;
+  flow_emitter.enable <- true;
+  flow_consumer.enable <- true;
+
+  Sim.cycle_n sim 2;
+  tst_emitter.enabled <- true;
+  Sim.cycle_n sim 2;
+  flow_consumer.enable <- false;
+  Sim.cycle_n sim 2;
+  flow_consumer.enable <- true;
+  tst_consumer.enabled <- false;
+  Sim.cycle_n sim 8;
+  tst_consumer.enabled <- true;
+  Sim.cycle_n sim 1;
+  flow_emitter.enable <- false;
+  tst_consumer.enabled <- false;
+  Sim.cycle_n sim 1;
+  flow_emitter.enable <- true;
+  Sim.cycle_n sim 7;
+  tst_consumer.enabled <- true;
+  Sim.cycle_n sim 10;
+  flow_emitter.enable <- false;
+  Sim.cycle_n sim 2;
+  flow_emitter.enable <- true;
+
+  Sim.cycle_n sim 10;
+  
+  Consumer.expect_reads tst_consumer;
+  FlowConsumer.expect_data flow_consumer;
+  Sim.expect_trace_digest sim;
+
+  [%expect {|
+    (consumed
+     (((field1 05060708090a) (field2 0b) (field3 0c0d))
+      ((field1 202122232425) (field2 26) (field3 2728))
+      ((field1 303132333435) (field2 36) (field3 3738))
+      ((field1 404142434445) (field2 46) (field3 4748))
+      ((field1 505152535455) (field2 56) (field3 5758))))
+    01020304 05060708 090a0b0c 0d0e0f10
+    11121314 15
+
+    20212223 24252627 28
+
+    30313233 34353637 38393a3b 3c3d3e3f
+    4041
+
+    50515253 54555657 58595a5b 5c5d5e5f
+    60616263 64656667 68696a6b 6c6d6e6f
+    70
+
+    80818283 84858687 88898a8b 8c8d8e8f
+
+    063db41ba61d522b9d9ffb66cb52043e|}]

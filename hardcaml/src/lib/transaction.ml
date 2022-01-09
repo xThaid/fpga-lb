@@ -25,6 +25,11 @@ module Make (Data : Interface.S) = struct
   let create s d = {s; d}
   let create_empty () = create (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
+  let create_from valid data = create {Src.valid; data} (Dst.Of_signal.wires ())
+
+  let is_fired t = Signal.(t.s.valid &: t.d.ready)
+  let is_stalled t = Signal.(t.s.valid &: ~:(t.d.ready))
+
   let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
 end
 
@@ -165,4 +170,78 @@ module Serializer (Data : Interface.S) = struct
 
     tst
 
+end
+
+module With_flow (TransData : Interface.S) = struct
+  module Transaction = Make(TransData)
+
+  type t = 
+    { tst : Transaction.t
+    ; flow : Flow.t
+    }
+
+  let create spec (tst_in : Transaction.t) (flow_in : Flow.t) =
+    let open Signal in
+
+    let tst_data = TransData.Of_always.reg spec in
+    let tst_valid = Always.Variable.reg ~width:1 spec in
+    let tst_out = Transaction.create_from tst_valid.value (TransData.Of_always.value tst_data) in
+
+    let buffer_en = Always.Variable.reg ~width:1 spec in
+    let flow_out = Flow.bufferize spec ~ready_ahead:false ~enable:buffer_en.value flow_in in
+
+    let module SM = struct
+      type t = Idle | Busy | Wait
+      [@@deriving sexp_of, compare, enumerate]
+    end in
+
+    let sm = Always.State_machine.create (module SM) ~enable:vdd spec in
+
+    Always.(compile [
+    sm.switch [
+      Idle, [
+        when_ (Transaction.is_fired tst_in) [
+          TransData.Of_always.assign tst_data tst_in.s.data;
+          tst_valid <--. 1;
+          buffer_en <--. 1;
+
+          sm.set_next Busy;
+        ]
+      ];
+
+      Busy, [
+        when_ (Transaction.is_fired tst_out) [
+          tst_valid <--. 0;
+        ];
+
+        when_ (Flow.is_fired_last flow_out) [
+          buffer_en <--. 0;
+
+          if_ (Transaction.is_fired tst_out |: ~:(tst_valid.value)) [
+            sm.set_next Idle;
+          ] [
+            sm.set_next Wait;
+          ];
+        ]
+      ];
+
+      Wait, [
+        when_ (Transaction.is_fired tst_out) [
+          tst_valid <--. 0;
+          sm.set_next Idle;
+        ];
+      ];
+    ]
+    ]);
+
+    tst_in.d.ready <== sm.is Idle; (* TODO: this can be changed to reduce latency *)
+
+    {tst = tst_out; flow = flow_out}
+
+  let demux spec ~(flow : t) ~sel _n =
+    let open Signal in
+
+    let _sel = reg spec ~enable:flow.tst.s.valid sel in
+    ()
+  
 end

@@ -234,3 +234,73 @@ module BusAgent (A : Bus.Agent.S) = struct
     Stdio.print_s [%message (List.rev t.reads : int list) (List.rev t.writes : (int * int) list)]
 
 end
+
+module TransactionConsumer (Data : Interface.S) = struct
+  module Transaction = Transaction.Make(Data)
+
+  type t =
+    { mutable consumed : string Data.t list 
+    ; mutable enabled : bool
+    ; tst_s : Bits.t ref Transaction.Src.t
+    ; tst_d : Bits.t ref Transaction.Dst.t
+    }
+
+  let create tst_s tst_d = 
+    { consumed = []
+    ; enabled = true
+    ; tst_s
+    ; tst_d
+    }
+
+  let comb t =
+    t.tst_d.ready := Bits.of_bool t.enabled
+
+  let seq t =
+    if (Bits.to_bool !(t.tst_s.valid)) && t.enabled then
+        t.consumed <- (Data.map t.tst_s.data ~f:(fun x -> Bits.to_constant !x |> Constant.to_hex_string ~signedness:Unsigned)) :: t.consumed
+
+  let expect_reads t = 
+    let consumed = List.rev t.consumed in
+    Stdio.print_s [%message (consumed : string Data.t list)]
+end
+
+module TransactionEmitter (Data : Interface.S) = struct
+  module Transaction = Transaction.Make(Data)
+
+  type t =
+    { transfers : string Data.t Linked_queue.t
+    ; mutable pending_transfer : string Data.t Option.t
+    ; mutable enabled : bool
+    ; tst_s : Bits.t ref Transaction.Src.t
+    ; tst_d : Bits.t ref Transaction.Dst.t
+    }
+
+  let create tst_s tst_d = 
+    { transfers = Linked_queue.create ()
+    ; pending_transfer = None
+    ; enabled = false
+    ; tst_s
+    ; tst_d
+    }
+
+  let comb t =
+    t.pending_transfer <- if Option.is_none t.pending_transfer then Linked_queue.dequeue t.transfers
+    else (t.pending_transfer);
+
+    t.tst_s.valid := Bits.gnd;
+
+    match t.pending_transfer with
+    | None -> ()
+    | Some transfer -> (
+      t.tst_s.valid := Bits.of_bool t.enabled;
+      Data.iter3 Data.port_widths t.tst_s.data transfer ~f:(fun width a b -> a := Bits.of_hex ~width b)
+    )
+
+  let seq t =
+    if t.enabled && (Bits.to_bool !(t.tst_d.ready)) then
+      t.pending_transfer <- None
+
+  let add_transfer t b =
+    Linked_queue.enqueue t.transfers b
+
+end
