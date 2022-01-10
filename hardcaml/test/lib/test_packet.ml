@@ -45,7 +45,7 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
 
     let hdr, inter_flow = Packetizer.create_depacketizer spec ~source in
 
-    let hdr_transf = Header.comb_map hdr ~f:(fun _ ->
+    let hdr_transf = Header.map_comb hdr ~f:(fun _ ->
       HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8")
     ) in
 

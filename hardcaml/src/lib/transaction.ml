@@ -21,11 +21,14 @@ module type S = sig
 
   type t
 
+  val data_len : int
+
   val t_of_if : Signal.t Src.t -> Signal.t Dst.t -> t
   val if_of_t : t -> Signal.t Src.t * Signal.t Dst.t
   val inputs : t -> Signal.t Src.t
   val outputs : t -> Signal.t Dst.t
   val create_wires : unit -> t
+  val create : valid:Signal.t -> data:Signal.t D.t -> t
 
   val is_fired : t -> Signal.t
   val is_stalled : t -> Signal.t
@@ -33,14 +36,11 @@ module type S = sig
   val valid : t -> Signal.t
   val data : t -> Signal.t D.t
 
-  val set_ready : t -> Signal.t -> unit
-
-  val comb_map : t -> f:(Signal.t D.t -> Signal.t D.t) -> t
-  val comb_filter : t -> f:(Signal.t D.t -> Signal.t) -> t
-  val data_len : int
+  val map_comb : t -> f:(Signal.t D.t -> Signal.t D.t) -> t
+  val filter_comb : t -> f:(Signal.t D.t -> Signal.t) -> t
 end
 
-module Make (Data : Interface.S) : (S with module D := Data) = struct
+module Make (Data : Interface.S) : (S with module D = Data) = struct
   module D = Data
 
   module Src = struct
@@ -63,11 +63,14 @@ module Make (Data : Interface.S) : (S with module D := Data) = struct
     ; d : Signal.t Dst.t
     }
 
+  let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
+
   let t_of_if (s : Signal.t Src.t) (d : Signal.t Dst.t) = {s; d}
   let if_of_t (t : t) =  t.s, t.d
   let inputs (t : t) = t.s
   let outputs (t : t) = t.d
   let create_wires () = t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
+  let create ~valid ~data = t_of_if {Src.valid; data} (Dst.Of_signal.wires ())
 
   let is_fired t = Signal.(t.s.valid &: t.d.ready)
   let is_stalled t = Signal.(t.s.valid &: ~:(t.d.ready))
@@ -75,16 +78,58 @@ module Make (Data : Interface.S) : (S with module D := Data) = struct
   let valid t = t.s.valid
   let data t = t.s.data
 
-  let set_ready t s = Signal.assign t.d.ready s
-
-  let comb_map t ~f =
+  let map_comb t ~f =
     t_of_if {Src.valid = t.s.valid; data = f t.s.data} t.d
-  let comb_filter t ~f =
+  let filter_comb t ~f =
     let open Signal in
     let filtered = f t.s.data in
-    t_of_if {Src.valid = t.s.valid &: filtered; data = t.s.data} {Dst.ready = t.d.ready |: filtered}
+    let new_tst = create ~valid:(t.s.valid &: filtered) ~data:t.s.data in
+    t.d.ready <== (new_tst.d.ready |: filtered);
+    new_tst
+end
 
-  let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
+module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
+  module TstFst = Make(DataFst)
+  module TstSnd = Make(DataSnd)
+
+  module Data = struct
+    type 'a t =
+      { fst : 'a DataFst.t
+      ; snd : 'a DataSnd.t
+      }
+    [@@deriving sexp_of, hardcaml]
+
+    let create fst snd = {fst; snd}
+  end
+
+  include Make(Data)
+  
+  let join_comb (fst : TstFst.t) (snd : TstSnd.t) =
+    let open Signal in
+
+    let res = create ~valid:((TstFst.valid fst) &: (TstSnd.valid snd)) ~data:{Data.fst = (TstFst.data fst); snd = (TstSnd.data snd)} in
+
+    assign (TstFst.ready fst) (TstSnd.valid snd &: ready res);
+    assign (TstSnd.ready snd) (TstFst.valid fst &: ready res);
+
+    res
+
+  let split_comb (tst : t) =
+    let open Signal in
+
+    let fst = TstFst.create_wires () in
+    let snd = TstSnd.create_wires () in
+
+    assign (TstFst.valid fst) (valid tst &: TstSnd.ready snd);    
+    assign (TstSnd.valid snd) (valid tst &: TstFst.ready fst);
+    assign (ready tst) ((TstFst.ready fst) &: (TstSnd.ready snd));
+
+    let data = data tst in
+    TstFst.D.Of_signal.assign (TstFst.data fst) data.fst;
+    TstSnd.D.Of_signal.assign (TstSnd.data snd) data.snd;
+
+    fst, snd
+
 end
 
 module Serializer (Data : Interface.S) = struct
@@ -270,7 +315,7 @@ module With_flow (Data : Interface.S) = struct
 
     let tst_data = Data.Of_always.reg spec in
     let tst_valid = Always.Variable.reg ~width:1 spec in
-    let tst_out = Tst.t_of_if {Tst.Src.valid = tst_valid.value; data = (Data.Of_always.value tst_data)} (Tst.Dst.Of_signal.wires ()) in
+    let tst_out = Tst.create ~valid:tst_valid.value ~data:(Data.Of_always.value tst_data) in
 
     let buffer_en = Always.Variable.reg ~width:1 spec in
     let flow_out = Flow.bufferize spec ~ready_ahead:false ~enable:buffer_en.value flow_in in
