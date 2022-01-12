@@ -19,6 +19,26 @@ module Dest = struct
   [@@deriving sexp_of, hardcaml]
 end
 
+module AvalonST = struct
+  module I = struct 
+    type 'a t =
+      { valid : 'a
+      ; endofpacket : 'a
+      ; startofpacket : 'a
+      ; data : 'a [@bits 32]
+      ; empty : 'a [@bits 2]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+  
+  module O = struct 
+    type 'a t =
+      { ready : 'a
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+end
+
 type t = 
 { src : Signal.t Source.t
 ; dst : Signal.t Dest.t
@@ -34,6 +54,50 @@ let empty_width = Source.port_widths.empty
 let is_fired t = Signal.(t.src.valid &: t.dst.ready)
 let is_fired_last t = Signal.((is_fired t) &: t.src.last)
 let is_stalled t = Signal.(t.src.valid &: ~:(t.dst.ready))
+
+let from_avalonst (i : Signal.t AvalonST.I.t) (o : Signal.t AvalonST.O.t) =
+  let open Signal in
+
+  let flow = create_wires () in
+
+  flow.src.valid <== i.valid;
+  flow.src.data <== i.data;
+  flow.src.empty <== i.empty;
+  flow.src.last <== i.endofpacket;
+
+  o.ready <== flow.dst.ready;
+
+  flow
+
+let to_avalonst spec (flow : t) =
+  let open Signal in
+
+  let i = AvalonST.I.Of_signal.wires () in
+  let o = AvalonST.O.Of_signal.wires () in
+
+  let busy = Always.Variable.reg spec ~width:1 in
+
+  Always.(compile [
+    if_ busy.value [
+      when_ (is_fired_last flow) [
+        busy <--. 0;
+      ]
+    ] [
+      when_ (is_fired flow) [
+        busy <--. 1;
+      ]
+    ]
+  ]);
+
+  i.valid <== flow.src.valid;
+  i.data <== flow.src.data;
+  i.empty <== flow.src.empty;
+  i.endofpacket <== flow.src.last;
+  i.startofpacket <== (~:(busy.value) &: (is_fired flow));
+
+  flow.dst.ready <== o.ready;
+
+  i, o
 
 let connect f1 f2 =
   Source.Of_signal.assign f1.src f2.src;

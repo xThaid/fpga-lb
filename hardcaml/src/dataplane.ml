@@ -6,16 +6,16 @@ module I = struct
   type 'a t =
     { clock : 'a
     ; clear : 'a
-    ; rx : 'a Flow.Source.t
-    ; tx : 'a Flow.Dest.t
+    ; rx : 'a Flow.AvalonST.I.t
+    ; tx : 'a Flow.AvalonST.O.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
 
 module O = struct
   type 'a t = 
-  { rx : 'a Flow.Dest.t
-  ; tx : 'a Flow.Source.t
+  { rx : 'a Flow.AvalonST.O.t
+  ; tx : 'a Flow.AvalonST.I.t
   }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -44,8 +44,13 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) =
 
   let o = O.Of_signal.wires () in
 
-  let rx = Flow.t_of_if i.rx o.rx in
-  let tx = Flow.t_of_if o.tx i.tx in
+  let rx = Flow.from_avalonst i.rx o.rx in
+
+  let tx = Flow.create_wires () in
+  let tx_i, tx_o = Flow.to_avalonst spec tx in
+
+  Flow.AvalonST.I.Of_signal.assign o.tx tx_i;
+  Flow.AvalonST.O.Of_signal.assign tx_o i.tx;
 
   create scope spec ~rx ~tx;
 
