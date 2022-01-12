@@ -7,23 +7,8 @@ module Config = struct
   let arp_table_capacity = 32
   let mac_addr = "aabbccddeeff"
   let mac_addr_bytes = Signal.of_hex ~width:48 mac_addr
-  let ip_addr = [10;100;0;0]
+  let ip_addr = [10;100;0;1]
   let ip_addr_bytes = List.map ip_addr ~f:(Signal.of_int ~width:8) |> Signal.concat_msb
-end
-
-module ArpPacket = struct
-  type 'a t =
-    { htype : 'a [@bits 16]
-    ; ptype : 'a [@bits 16]
-    ; hlen : 'a [@bits 8]
-    ; plen : 'a [@bits 8]
-    ; oper : 'a [@bits 16]
-    ; sha : 'a [@bits 48]
-    ; spa : 'a [@bits 32]
-    ; tha : 'a [@bits 48]
-    ; tpa : 'a [@bits 32]
-    }
-  [@@deriving sexp_of, hardcaml]
 end
 
 module I = struct
@@ -47,41 +32,35 @@ module O = struct
 end
 
 let datapath spec ~(rx : Eth_flow.t) = 
-  let module ArpSerializer = Transaction.Serializer(ArpPacket) in
-  let module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(ArpPacket) in
+  let module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket) in
   
-  let arp_payload = ArpSerializer.deserialize spec rx.flow in
-  let eth_hdr, arp_payload = 
-    EthArpTst.join_comb rx.tst arp_payload |>
+  EthArpTst.from_fst_flow spec rx |>
 
-    EthArpTst.filter_comb ~f:(fun pkt ->
-      let open Signal in
-      (pkt.snd.tpa ==: Config.ip_addr_bytes) &: (pkt.snd.oper ==:. 1)
-    ) |>
+  EthArpTst.filter_comb ~f:(fun pkt ->
+    let open Signal in
+    (pkt.snd.tpa ==: Config.ip_addr_bytes) &: (pkt.snd.oper ==:. 1)
+  ) |>
 
-    EthArpTst.map_comb ~f:(fun pkt ->
-      let eth =
-        { pkt.fst with
-          dest_mac = pkt.fst.src_mac
-        ; src_mac = Config.mac_addr_bytes
-        }
-      in
-      let arp =
-        { pkt.snd with
-          oper = Signal.of_int ~width:16 2
-        ; sha = Config.mac_addr_bytes
-        ; spa = Config.ip_addr_bytes
-        ; tha = pkt.snd.sha
-        ; tpa = pkt.snd.spa
-        }
-      in
-      EthArpTst.Data.create eth arp
-    ) |>
+  EthArpTst.map_comb ~f:(fun pkt ->
+    let eth =
+      { pkt.fst with
+        dest_mac = pkt.fst.src_mac
+      ; src_mac = Config.mac_addr_bytes
+      }
+    in
+    let arp =
+      { pkt.snd with
+        oper = Signal.of_int ~width:16 2
+      ; sha = Config.mac_addr_bytes
+      ; spa = Config.ip_addr_bytes
+      ; tha = pkt.snd.sha
+      ; tpa = pkt.snd.spa
+      }
+    in
+    EthArpTst.Data.create eth arp
+  ) |>
 
-    EthArpTst.split_comb
-  in
-
-  Eth_flow.combine spec eth_hdr (ArpSerializer.serialize spec arp_payload)
+  EthArpTst.to_fst_flow spec
 
 let create
       (scope : Scope.t)

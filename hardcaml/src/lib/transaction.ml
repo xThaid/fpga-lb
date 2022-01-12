@@ -84,52 +84,8 @@ module Make (Data : Interface.S) : (S with module D = Data) = struct
     let open Signal in
     let filtered = f t.s.data in
     let new_tst = create ~valid:(t.s.valid &: filtered) ~data:t.s.data in
-    t.d.ready <== (new_tst.d.ready |: filtered);
+    t.d.ready <== (new_tst.d.ready |: ~:(filtered));
     new_tst
-end
-
-module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
-  module TstFst = Make(DataFst)
-  module TstSnd = Make(DataSnd)
-
-  module Data = struct
-    type 'a t =
-      { fst : 'a DataFst.t
-      ; snd : 'a DataSnd.t
-      }
-    [@@deriving sexp_of, hardcaml]
-
-    let create fst snd = {fst; snd}
-  end
-
-  include Make(Data)
-  
-  let join_comb (fst : TstFst.t) (snd : TstSnd.t) =
-    let open Signal in
-
-    let res = create ~valid:((TstFst.valid fst) &: (TstSnd.valid snd)) ~data:{Data.fst = (TstFst.data fst); snd = (TstSnd.data snd)} in
-
-    assign (TstFst.ready fst) (TstSnd.valid snd &: ready res);
-    assign (TstSnd.ready snd) (TstFst.valid fst &: ready res);
-
-    res
-
-  let split_comb (tst : t) =
-    let open Signal in
-
-    let fst = TstFst.create_wires () in
-    let snd = TstSnd.create_wires () in
-
-    assign (TstFst.valid fst) (valid tst &: TstSnd.ready snd);    
-    assign (TstSnd.valid snd) (valid tst &: TstFst.ready fst);
-    assign (ready tst) ((TstFst.ready fst) &: (TstSnd.ready snd));
-
-    let data = data tst in
-    TstFst.D.Of_signal.assign (TstFst.data fst) data.fst;
-    TstSnd.D.Of_signal.assign (TstSnd.data snd) data.snd;
-
-    fst, snd
-
 end
 
 module Serializer (Data : Interface.S) = struct
@@ -209,7 +165,9 @@ module Serializer (Data : Interface.S) = struct
     let data_words = (Tst.data_len + Flow.word_width - 1) / Flow.word_width in
     let data_buf_width = data_words * Flow.word_width in
 
-    let tst_valid_next = Always.Variable.wire ~default:gnd in
+    let data_word_counter = Always.Variable.reg ~width:(num_bits_to_represent data_words) spec in
+
+    let tst_valid = Always.Variable.reg ~width:1 spec in
     let data_buf = Always.Variable.reg ~width:data_buf_width spec in
     let append_data_buf () = Always.(data_buf <-- ((sll data_buf.value Flow.word_width) |: (uresize flow.src.data data_buf_width))) in
 
@@ -219,6 +177,7 @@ module Serializer (Data : Interface.S) = struct
       type t =
         | Idle
         | Read
+        | ReadLast
         | Wait
       [@@deriving sexp_of, compare, enumerate]
     end
@@ -229,7 +188,9 @@ module Serializer (Data : Interface.S) = struct
     Always.(compile [
     sm.switch [
       Idle, [
-        when_ flow.src.valid [
+        data_word_counter <--. 1;
+
+        when_ (Flow.is_fired flow) [
           append_data_buf ();
           sm.set_next Read;
         ]
@@ -237,15 +198,33 @@ module Serializer (Data : Interface.S) = struct
 
       Read, [
         when_ (Flow.is_fired flow) [
+          data_word_counter <-- data_word_counter.value +:. 1;
           append_data_buf ();
-          when_ flow.src.last [
-            if_ (Tst.ready tst) [
-              tst_valid_next <-- vdd;
-              sm.set_next Idle;
-            ] [
+
+          when_ (data_word_counter.value ==:. data_words - 1) [
+            tst_valid <--. 1;
+
+            if_ (flow.src.last) [
               ready_next <--. 0;
               sm.set_next Wait;
+            ] [
+              sm.set_next ReadLast;
             ]
+          ];
+        ]
+      ];
+
+      ReadLast, [
+        when_ (Tst.ready tst) [
+          tst_valid <--. 0;
+        ];
+
+        when_ (Flow.is_fired_last flow) [
+          if_ (Tst.ready tst |: ~:(tst_valid.value)) [
+            sm.set_next Idle;
+          ] [
+            ready_next <--. 0;
+            sm.set_next Wait;
           ];
         ]
       ];
@@ -254,7 +233,7 @@ module Serializer (Data : Interface.S) = struct
         ready_next <--. 0;
 
         when_ (Tst.ready tst) [
-          tst_valid_next <-- vdd;
+          tst_valid <--. 0;
           ready_next <--. 1;
           sm.set_next Idle;
         ]
@@ -264,7 +243,7 @@ module Serializer (Data : Interface.S) = struct
 
     flow.dst.ready <== (reg spec ready_next.value);
 
-    assign (Tst.valid tst) (reg spec tst_valid_next.value);
+    assign (Tst.valid tst) tst_valid.value;
     Data.Of_signal.assign (Tst.data tst) (Data.Of_signal.unpack ~rev:true (sel_top data_buf.value Tst.data_len));
 
     tst
@@ -374,4 +353,60 @@ module With_flow (Data : Interface.S) = struct
     let _sel = reg spec ~enable:(Tst.valid flow.tst) sel in
     ()
   
+end
+
+module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
+  module TstFst = Make(DataFst)
+  module TstSnd = Make(DataSnd)
+  module FstFlow = With_flow(DataFst)
+
+  module Data = struct
+    type 'a t =
+      { fst : 'a DataFst.t
+      ; snd : 'a DataSnd.t
+      }
+    [@@deriving sexp_of, hardcaml]
+
+    let create fst snd = {fst; snd}
+  end
+
+  include Make(Data)
+  
+  let join_comb (fst : TstFst.t) (snd : TstSnd.t) =
+    let open Signal in
+
+    let res = create ~valid:((TstFst.valid fst) &: (TstSnd.valid snd)) ~data:{Data.fst = (TstFst.data fst); snd = (TstSnd.data snd)} in
+
+    assign (TstFst.ready fst) ((TstSnd.valid snd) &: ready res);
+    assign (TstSnd.ready snd) ((TstFst.valid fst) &: ready res);
+
+    res
+
+  let split_comb (tst : t) =
+    let open Signal in
+
+    let fst = TstFst.create_wires () in
+    let snd = TstSnd.create_wires () in
+
+    assign (TstFst.valid fst) (valid tst &: TstSnd.ready snd);    
+    assign (TstSnd.valid snd) (valid tst &: TstFst.ready fst);
+    assign (ready tst) ((TstFst.ready fst) &: (TstSnd.ready snd));
+
+    let data = data tst in
+    TstFst.D.Of_signal.assign (TstFst.data fst) data.fst;
+    TstSnd.D.Of_signal.assign (TstSnd.data snd) data.snd;
+
+    fst, snd
+
+  let from_fst_flow spec (flow : FstFlow.t) =
+    let module Serializer = Serializer(DataSnd) in
+    let snd = Serializer.deserialize spec flow.flow in
+    join_comb flow.tst snd
+
+  let to_fst_flow spec tst =
+    let module Serializer = Serializer(DataSnd) in
+    let fst, snd = split_comb tst in
+    let serialized = Serializer.serialize spec snd in
+    FstFlow.combine spec fst serialized
+
 end

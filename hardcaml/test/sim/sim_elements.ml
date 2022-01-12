@@ -12,6 +12,9 @@ module FlowEmitter = struct
     ; dst : Bits.t ref Flow.Dest.t
     }
 
+  let transfer_done t =
+    !(t.buff_pos) >= Bytes.length !(t.buff)
+
   let comb t = 
     let get_nth_byte n = 
       if n >= Bytes.length !(t.buff) then
@@ -20,7 +23,7 @@ module FlowEmitter = struct
         Bytes.get !(t.buff) n |> Bits.of_char
     in
 
-    if !(t.buff_pos) >= Bytes.length !(t.buff) then (
+    if transfer_done t then (
       match Linked_queue.dequeue t.transfers with
       | None -> ()
       | Some b -> t.buff_pos := 0; t.buff := b
@@ -29,14 +32,12 @@ module FlowEmitter = struct
     let buf_len = Bytes.length !(t.buff) in
 
     t.src.data := List.init 4 ~f:(fun i -> get_nth_byte (!(t.buff_pos) + i)) |> Bits.concat_msb;
-    t.src.valid := Bits.of_bool (!(t.buff_pos) < buf_len && t.enabled);
+    t.src.valid := Bits.of_bool (not (transfer_done t) && t.enabled);
     t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.buff_pos) - buf_len));
     t.src.last := Bits.of_bool (4 + !(t.buff_pos) >= buf_len)
 
   let seq t =
-    let buf_len = Bytes.length !(t.buff) in
-
-    if (Bits.is_vdd !(t.dst.ready)) && !(t.buff_pos) < buf_len && t.enabled then
+    if (Bits.is_vdd !(t.dst.ready)) && not (transfer_done t) && t.enabled then
       t.buff_pos := !(t.buff_pos) + 4
 
   let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) =
@@ -247,7 +248,7 @@ module TransactionConsumer (Data : Interface.S) = struct
 
   let create tst_s tst_d = 
     { consumed = []
-    ; enabled = true
+    ; enabled = false
     ; tst_s
     ; tst_d
     }
@@ -283,8 +284,11 @@ module TransactionEmitter (Data : Interface.S) = struct
     ; tst_d
     }
 
+  let transfer_done t =
+    Option.is_none t.pending_transfer
+
   let comb t =
-    t.pending_transfer <- if Option.is_none t.pending_transfer then Linked_queue.dequeue t.transfers
+    t.pending_transfer <- if transfer_done t then Linked_queue.dequeue t.transfers
     else (t.pending_transfer);
 
     t.tst_s.valid := Bits.gnd;
@@ -302,5 +306,82 @@ module TransactionEmitter (Data : Interface.S) = struct
 
   let add_transfer t b =
     Linked_queue.enqueue t.transfers b
+
+end
+
+module TransactionWithFlowEmitter (Data : Interface.S) = struct
+  module Transaction = Transaction.With_flow(Data)
+  module TstEmitter = TransactionEmitter(Data)
+
+  type t =
+    { mutable enabled : bool
+    ; transfers : (string Data.t * bytes) Linked_queue.t
+    ; tst_emit : TstEmitter.t
+    ; flow_emit : FlowEmitter.t
+    }
+
+  let create (src : Bits.t ref Transaction.Src.t) (dst : Bits.t ref Transaction.Dst.t) = 
+    { enabled = false
+    ; transfers = Linked_queue.create ()
+    ; tst_emit = TstEmitter.create src.tst dst.tst
+    ; flow_emit = FlowEmitter.create src.flow dst.flow
+    }
+
+  let comb t =
+    t.tst_emit.enabled <- t.enabled;
+    t.flow_emit.enabled <- t.enabled;
+
+    if TstEmitter.transfer_done t.tst_emit && FlowEmitter.transfer_done t.flow_emit then (
+      match Linked_queue.dequeue t.transfers with
+      | None -> ()
+      | Some(tst_data, flow_data) ->
+        TstEmitter.add_transfer t.tst_emit tst_data;
+        FlowEmitter.add_transfer t.flow_emit flow_data
+    );
+
+    TstEmitter.comb t.tst_emit;
+    FlowEmitter.comb t.flow_emit
+
+  let seq t =
+    TstEmitter.seq t.tst_emit;
+    FlowEmitter.seq t.flow_emit
+
+  let add_transfer t tst_data flow_data =
+    Linked_queue.enqueue t.transfers (tst_data, flow_data)
+
+end
+
+module TransactionWithFlowConsumer (Data : Interface.S) = struct
+  module Transaction = Transaction.With_flow(Data)
+  module TstConsumer = TransactionConsumer(Data)
+
+  type t =
+    { mutable enabled : bool
+    ; transfers : (string Data.t * bytes) Linked_queue.t
+    ; tst_cons : TstConsumer.t
+    ; flow_cons : FlowConsumer.t
+    }
+
+  let create (src : Bits.t ref Transaction.Src.t) (dst : Bits.t ref Transaction.Dst.t) = 
+    { enabled = false
+    ; transfers = Linked_queue.create ()
+    ; tst_cons = TstConsumer.create src.tst dst.tst
+    ; flow_cons = FlowConsumer.create src.flow dst.flow
+    }
+
+  let comb t =
+    t.tst_cons.enabled <- t.enabled;
+    t.flow_cons.enabled <- t.enabled;
+
+    TstConsumer.comb t.tst_cons;
+    FlowConsumer.comb t.flow_cons
+
+  let seq t =
+    TstConsumer.seq t.tst_cons;
+    FlowConsumer.seq t.flow_cons
+
+  let expect_transfers t =
+    TstConsumer.expect_reads t.tst_cons;
+    FlowConsumer.expect_data t.flow_cons
 
 end

@@ -1,0 +1,54 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Wed Jan 12 21:14:34 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/arp.gtkw"
+[timestart] 864
+[size] 1713 891
+[pos] -1 -1
+*-4.000000 825 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 376
+[sst_expanded] 1
+[sst_vpaned_height] 244
+@28
+inputs.clock
+@200
+-
+@22
+inputs.rx_flow_data[31:0]
+@28
+inputs.rx_flow_last
+inputs.rx_flow_valid
+outputs.rx_flow_ready
+@200
+-
+@22
+inputs.rx_tst_ether_type[15:0]
+inputs.rx_tst_src_mac[47:0]
+@28
+inputs.rx_tst_valid
+outputs.rx_tst_ready
+@200
+-
+@22
+outputs.tx_flow_data[31:0]
+@28
+outputs.tx_flow_empty[1:0]
+outputs.tx_flow_last
+outputs.tx_flow_valid
+inputs.tx_flow_ready
+@200
+-
+@22
+outputs.tx_tst_dest_mac[47:0]
+outputs.tx_tst_ether_type[15:0]
+outputs.tx_tst_src_mac[47:0]
+@28
+outputs.tx_tst_valid
+inputs.tx_tst_ready
+@200
+-
+[pattern_trace] 1
+[pattern_trace] 0

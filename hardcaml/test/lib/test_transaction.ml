@@ -212,20 +212,24 @@ let%expect_test "transaction_deserializer" =
   Sim.add_element sim (module FlowEmitter) emitter;
   Sim.add_element sim (module Consumer) consumer;
 
-  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 13);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 22);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:32 9);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:48 9);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:64 9);
   FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:80 9);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:96 24);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:112 9);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:128 9);
 
   emitter.enabled <- true;
+  consumer.enabled <- true;
 
   Sim.cycle_n sim 4;
 
   emitter.enabled <- false;
   Sim.cycle_n sim 2;
   emitter.enabled <- true;
-  Sim.cycle_n sim 1;
+  Sim.cycle_n sim 5;
   emitter.enabled <- false;
   Sim.cycle_n sim 1;
   emitter.enabled <- true;
@@ -241,20 +245,27 @@ let%expect_test "transaction_deserializer" =
   consumer.enabled <- false;
   Sim.cycle_n sim 3;
   consumer.enabled <- true;
+  Sim.cycle_n sim 6;
+  consumer.enabled <- false;
+  Sim.cycle_n sim 7;
+  consumer.enabled <- true;
 
-  Sim.cycle_n sim 10;
+  Sim.cycle_n sim 15;
 
   Consumer.expect_reads consumer;
   Sim.expect_trace_digest sim;
 
   [%expect {|
     (consumed
-     (((field1 05060708090a) (field2 0b) (field3 0c0d))
+     (((field1 010203040506) (field2 07) (field3 0809))
       ((field1 202122232425) (field2 26) (field3 2728))
       ((field1 303132333435) (field2 36) (field3 3738))
       ((field1 404142434445) (field2 46) (field3 4748))
-      ((field1 505152535455) (field2 56) (field3 5758))))
-    20e84cdbc0afdadb46f0349e6936847d|}]
+      ((field1 505152535455) (field2 56) (field3 5758))
+      ((field1 606162636465) (field2 66) (field3 6768))
+      ((field1 707172737475) (field2 76) (field3 7778))
+      ((field1 808182838485) (field2 86) (field3 8788))))
+    898e55e1d82bf24b7a30f8a33080f83a|}]
 
 
 module WithFlowSim (Data : Interface.S) = struct
@@ -341,6 +352,7 @@ let%expect_test "transaction_with_flow" =
   Sim.cycle_n sim 1;
   flow_emitter.enabled <- true;
   flow_consumer.enabled <- true;
+  tst_consumer.enabled <- true;
 
   Sim.cycle_n sim 2;
   tst_emitter.enabled <- true;
