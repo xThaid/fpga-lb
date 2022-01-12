@@ -282,6 +282,8 @@ module With_flow (Data : Interface.S) = struct
     let tst_s, tst_d = Tst.if_of_t t.tst in
     let flow_src, flow_dst = Flow.if_of_t t.flow in
     {Src.tst = tst_s; flow = flow_src}, {Dst.tst = tst_d; flow = flow_dst}
+  let create_wires () = 
+    t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
   let connect t1 t2 =
     let i1, o1 = if_of_t t1 in
@@ -346,6 +348,17 @@ module With_flow (Data : Interface.S) = struct
     assign (Tst.ready tst_in) (sm.is Idle); (* TODO: this can be changed to reduce latency *)
 
     {tst = tst_out; flow = flow_out}
+
+  let from_flow spec (flow : Flow.t) =
+    let module Serializer = Serializer(Data) in
+    let f1, f2 = Flow.split spec ~hdr_length:Tst.data_len ~source:flow in
+    let tst = Serializer.deserialize spec f1 in
+    combine spec tst f2
+
+  let to_flow spec (flow : t) =
+    let module Serializer = Serializer(Data) in
+    let f1 = Serializer.serialize spec flow.tst in
+    Flow.join spec ~hdr_length:Tst.data_len ~source1:f1 ~source2:flow.flow
 
   let demux spec ~(flow : t) ~sel _n =
     let open Signal in

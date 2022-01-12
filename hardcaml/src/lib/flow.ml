@@ -125,9 +125,10 @@ let shifter ~shift reg_spec (source : t) =
   shifted, shifted_ready_next.value
 
 (* Sources must have read latency equal to 0. Sink has ready latency 1 *)
-let join spec ~shift ~(source1 : t) ~(source2 : t) =
+let join spec ~hdr_length ~(source1 : t) ~(source2 : t) =
   let open Signal in
 
+  let shift = (hdr_length % word_width) / 8 in
   let shift_compl = ((word_width - (shift * 8) % word_width) % word_width) / 8 in
 
   let sink = create_wires () in
@@ -206,7 +207,7 @@ let join spec ~shift ~(source1 : t) ~(source2 : t) =
 
   Source.Of_signal.assign sink.src (Source.Of_always.value sink_src);
   
-  sink
+  bufferize spec sink
 
 (* Source must have read latency 0. Sinks have ready latency 1. *)
 let split spec ~hdr_length ~(source : t) =
@@ -281,6 +282,6 @@ let split spec ~hdr_length ~(source : t) =
   sink2.src.empty <== shifted_source.empty;
   sink2.src.valid <== sink2_valid.value;
 
-  sink1, sink2
+  sink1, bufferize spec sink2
 
 

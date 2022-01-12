@@ -3,7 +3,7 @@ open Hardcaml
 open Lb_dataplane
 open Sim_elements
 
-module ArpTableSim = struct
+module ArpSim = struct
   module I = Arp.I
   module O = Arp.O
 
@@ -15,7 +15,7 @@ module ArpTableSim = struct
 end
 
 let%expect_test "arp" =
-  let module Sim = Sim.Sim(ArpTableSim) in
+  let module Sim = Sim.Sim(ArpSim) in
   let module Emitter = TransactionWithFlowEmitter(Common.EthernetHeader) in
   let module Consumer = TransactionWithFlowConsumer(Common.EthernetHeader) in
   
