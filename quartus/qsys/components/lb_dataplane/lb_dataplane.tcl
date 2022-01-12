@@ -52,21 +52,19 @@ set_interface_property rx_avalonst dataBitsPerSymbol 8
 set_interface_property rx_avalonst errorDescriptor ""
 set_interface_property rx_avalonst firstSymbolInHighOrderBits true
 set_interface_property rx_avalonst maxChannel 0
-set_interface_property rx_avalonst readyLatency 2
+set_interface_property rx_avalonst readyLatency 0
 set_interface_property rx_avalonst ENABLED true
 set_interface_property rx_avalonst EXPORT_OF ""
 set_interface_property rx_avalonst PORT_NAME_MAP ""
 set_interface_property rx_avalonst CMSIS_SVD_VARIABLES ""
 set_interface_property rx_avalonst SVD_ADDRESS_GROUP ""
 
-add_interface_port rx_avalonst rx_avalonst_data data Input 32
-add_interface_port rx_avalonst rx_avalonst_valid valid Input 1
-add_interface_port rx_avalonst rx_avalonst_endofpacket endofpacket Input 1
-add_interface_port rx_avalonst rx_avalonst_startofpacket startofpacket Input 1
-add_interface_port rx_avalonst rx_avalonst_empty empty Input 2
-add_interface_port rx_avalonst rx_avalonst_ready ready Output 1
-add_interface_port rx_avalonst rx_avalonst_error error Input 6
-
+add_interface_port rx_avalonst rx_data data Input 32
+add_interface_port rx_avalonst rx_valid valid Input 1
+add_interface_port rx_avalonst rx_endofpacket endofpacket Input 1
+add_interface_port rx_avalonst rx_startofpacket startofpacket Input 1
+add_interface_port rx_avalonst rx_empty empty Input 2
+add_interface_port rx_avalonst rx_ready ready Output 1
 
 # 
 # connection point tx_avalonst
@@ -85,13 +83,12 @@ set_interface_property tx_avalonst PORT_NAME_MAP ""
 set_interface_property tx_avalonst CMSIS_SVD_VARIABLES ""
 set_interface_property tx_avalonst SVD_ADDRESS_GROUP ""
 
-add_interface_port tx_avalonst tx_avalonst_data data Output 32
-add_interface_port tx_avalonst tx_avalonst_endofpacket endofpacket Output 1
-add_interface_port tx_avalonst tx_avalonst_startofpacket startofpacket Output 1
-add_interface_port tx_avalonst tx_avalonst_valid valid Output 1
-add_interface_port tx_avalonst tx_avalonst_ready ready Input 1
-add_interface_port tx_avalonst tx_avalonst_empty empty Output 2
-add_interface_port tx_avalonst tx_avalonst_error error Output 1
+add_interface_port tx_avalonst tx_data data Output 32
+add_interface_port tx_avalonst tx_endofpacket endofpacket Output 1
+add_interface_port tx_avalonst tx_startofpacket startofpacket Output 1
+add_interface_port tx_avalonst tx_valid valid Output 1
+add_interface_port tx_avalonst tx_ready ready Input 1
+add_interface_port tx_avalonst tx_empty empty Output 2
 
 
 # 
@@ -105,7 +102,7 @@ set_interface_property clk PORT_NAME_MAP ""
 set_interface_property clk CMSIS_SVD_VARIABLES ""
 set_interface_property clk SVD_ADDRESS_GROUP ""
 
-add_interface_port clk clk clk Input 1
+add_interface_port clk clock clk Input 1
 
 
 # 
@@ -120,5 +117,5 @@ set_interface_property reset PORT_NAME_MAP ""
 set_interface_property reset CMSIS_SVD_VARIABLES ""
 set_interface_property reset SVD_ADDRESS_GROUP ""
 
-add_interface_port reset reset reset Input 1
+add_interface_port reset clear reset Input 1
 
