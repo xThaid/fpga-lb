@@ -32,6 +32,8 @@ module Table = struct
   
     let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
     let if_of_t (t : Signal.t t) = t.i, t.o
+
+    let create_wires () = t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
   end
   
   module WritePort = struct

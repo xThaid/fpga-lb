@@ -24,3 +24,22 @@ module ArpPacket = struct
     }
   [@@deriving sexp_of, hardcaml]
 end
+
+module IPv4Header = struct
+  type 'a t =
+    { version : 'a [@bits 4]
+    ; ihl : 'a [@bits 4]
+    ; dscp : 'a [@bits 6]
+    ; ecn : 'a [@bits 2]
+    ; total_length : 'a [@bits 16]
+    ; identification : 'a [@bits 16]
+    ; flags : 'a [@bits 3]
+    ; fragment_offset : 'a [@bits 13]
+    ; ttl : 'a [@bits 8]
+    ; protocol : 'a [@bits 8]
+    ; hdr_checksum : 'a [@bits 16]
+    ; src_ip : 'a [@bits 32]
+    ; dst_ip : 'a [@bits 32]
+    }
+  [@@deriving sexp_of, hardcaml]
+end

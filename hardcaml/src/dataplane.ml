@@ -1,6 +1,7 @@
 open Hardcaml
 
 module Eth_flow = Transaction.With_flow(Common.EthernetHeader)
+module IPv4_flow = Transaction.With_flow(Common.IPv4Header)
 
 module I = struct
   type 'a t =
@@ -28,10 +29,7 @@ let create
 
   let rx_eth_flow = Eth_flow.from_flow spec rx in
 
-  let arp_query_port = Arp.Table.ReadPort.t_of_if 
-    (Arp.Table.ReadPort.I.Of_signal.wires ()) 
-    (Arp.Table.ReadPort.O.Of_signal.wires ())
-  in
+  let arp_query_port = Arp.Table.ReadPort.create_wires () in
   Arp.Table.ReadPort.I.iter2 arp_query_port.i Arp.Table.ReadPort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
 
   let arp_tx = Eth_flow.create_wires () in
