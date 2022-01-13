@@ -28,11 +28,11 @@ let create
 
   let rx_eth_flow = Eth_flow.from_flow spec rx in
 
-  let arp_query_port = Arp_table.ReadPort.t_of_if 
-    (Arp_table.ReadPort.I.Of_signal.wires ()) 
-    (Arp_table.ReadPort.O.Of_signal.wires ())
+  let arp_query_port = Arp.Table.ReadPort.t_of_if 
+    (Arp.Table.ReadPort.I.Of_signal.wires ()) 
+    (Arp.Table.ReadPort.O.Of_signal.wires ())
   in
-  Arp_table.ReadPort.I.iter2 arp_query_port.i Arp_table.ReadPort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
+  Arp.Table.ReadPort.I.iter2 arp_query_port.i Arp.Table.ReadPort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
 
   let arp_tx = Eth_flow.create_wires () in
   Arp.hierarchical scope spec ~rx:rx_eth_flow ~tx:arp_tx ~query:arp_query_port;
