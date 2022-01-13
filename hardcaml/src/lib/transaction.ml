@@ -38,6 +38,10 @@ module type S = sig
 
   val map_comb : t -> f:(Signal.t D.t -> Signal.t D.t) -> t
   val filter_comb : t -> f:(Signal.t D.t -> Signal.t) -> t
+
+  val demux : int -> Signal.t -> t -> t list
+  val demux2_on : t -> f:(Signal.t D.t -> Signal.t) -> t * t
+  val apply : t -> f:(valid:Signal.t -> data:Signal.t D.t -> Signal.t) -> unit
 end
 
 module Make (Data : Interface.S) : (S with module D = Data) = struct
@@ -86,6 +90,29 @@ module Make (Data : Interface.S) : (S with module D = Data) = struct
     let new_tst = create ~valid:(t.s.valid &: filtered) ~data:t.s.data in
     t.d.ready <== (new_tst.d.ready |: ~:(filtered));
     new_tst
+
+  let demux n sel tst = 
+    let open Signal in
+
+    if (Signal.width sel) <> (Signal.address_bits_for n) then
+      raise_s [%message "sel signal in demultiplexer has incorrect width"];
+
+    let tsts = List.init n ~f:(fun i ->
+      create ~valid:(tst.s.valid &: (sel ==:. i)) ~data:tst.s.data
+    ) in
+
+    tst.d.ready <== mux sel (List.map tsts ~f:(fun t -> t.d.ready));
+
+    tsts
+
+  let demux2_on tst ~f =
+    let sel = f tst.s.data in
+    let tsts = demux 2 sel tst in
+    List.nth_exn tsts 1, List.nth_exn tsts 0
+
+  let apply tst ~(f : (valid:Signal.t -> data:Signal.t D.t -> Signal.t)) =
+    Signal.(tst.d.ready <== (f ~valid:tst.s.valid ~data:tst.s.data))
+
 end
 
 module Serializer (Data : Interface.S) = struct
@@ -299,7 +326,8 @@ module With_flow (Data : Interface.S) = struct
     let tst_out = Tst.create ~valid:tst_valid.value ~data:(Data.Of_always.value tst_data) in
 
     let buffer_en = Always.Variable.reg ~width:1 spec in
-    let flow_out = Flow.bufferize spec ~ready_ahead:false ~enable:buffer_en.value flow_in in
+    let flow_out = Flow.bufferize spec ~ready_ahead:false flow_in in
+    let flow_out = Flow.gate buffer_en.value flow_out in
 
     let module SM = struct
       type t = Idle | Busy | Wait
@@ -410,16 +438,5 @@ module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
     TstSnd.D.Of_signal.assign (TstSnd.data snd) data.snd;
 
     fst, snd
-
-  let from_fst_flow spec (flow : FstFlow.t) =
-    let module Serializer = Serializer(DataSnd) in
-    let snd = Serializer.deserialize spec flow.flow in
-    join_comb flow.tst snd
-
-  let to_fst_flow spec tst =
-    let module Serializer = Serializer(DataSnd) in
-    let fst, snd = split_comb tst in
-    let serialized = Serializer.serialize spec snd in
-    FstFlow.combine spec fst serialized
 
 end

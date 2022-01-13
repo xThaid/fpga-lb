@@ -103,8 +103,22 @@ let connect f1 f2 =
   Source.Of_signal.assign f1.src f2.src;
   Dest.Of_signal.assign f2.dst f1.dst
 
+let gate enable (source :t) =
+  let open Signal in
+
+  let sink = create_wires () in 
+
+  sink.src.data <== source.src.data;
+  sink.src.empty <== source.src.empty;
+  sink.src.last <== source.src.last;
+  sink.src.valid <== (source.src.valid &: enable);
+
+  source.dst.ready <== (sink.dst.ready &: enable);
+
+  sink
+
 (* bufferize cuts Flow.Source paths (valid/last/data/empty). Optionally, it can cut ready path as well. *)
-let bufferize reg_spec ?(ready_ahead = true) ?(enable = Signal.vdd) (source : t) =
+let bufferize reg_spec ?(ready_ahead = true) (source : t) =
   let open Signal in
 
   let module BufferData = struct
@@ -123,14 +137,14 @@ let bufferize reg_spec ?(ready_ahead = true) ?(enable = Signal.vdd) (source : t)
 
   let buffer_in = Buffer.I.Of_signal.wires () in
   buffer_in.wr_enable <== source.src.valid;
-  buffer_in.rd_enable <== (sink.dst.ready &: enable);
+  buffer_in.rd_enable <== sink.dst.ready;
   buffer_in.wr_data.data <== source.src.data;
   buffer_in.wr_data.empty <== source.src.empty;
   buffer_in.wr_data.last <== source.src.last;
 
   let buffer_out = Buffer.create reg_spec buffer_in in
   source.dst.ready <== (if ready_ahead then buffer_out.ready_next else buffer_out.ready);
-  sink.src.valid <== (buffer_out.rd_valid &: enable);
+  sink.src.valid <== buffer_out.rd_valid;
   sink.src.data <== buffer_out.rd_data.data;
   sink.src.last <== buffer_out.rd_data.last;
   sink.src.empty <== buffer_out.rd_data.empty;

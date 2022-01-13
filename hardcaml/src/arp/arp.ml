@@ -2,6 +2,7 @@ open Base
 open Hardcaml
 
 module Eth_flow = Transaction.With_flow(Common.EthernetHeader)
+module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket)
 
 module Config = struct
   let arp_table_capacity = 32
@@ -31,14 +32,28 @@ module O = struct
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
 
-let datapath spec ~(rx : Eth_flow.t) = 
-  let module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket) in
-  
-  EthArpTst.from_fst_flow spec rx |>
+let datapath spec ~(rx : Eth_flow.t) (table_write_port : Signal.t Arp_table.WritePort.t) = 
+  let module Serializer = Transaction.Serializer(Common.ArpPacket) in
 
-  EthArpTst.filter_comb ~f:(fun pkt ->
+  let tst_in = EthArpTst.join_comb rx.tst (Serializer.deserialize spec rx.flow) in
+
+  let arp_in_req, arp_in_resp = 
+    EthArpTst.demux2_on tst_in ~f:(fun pkt -> Signal.(pkt.snd.oper ==:. 1))
+  in
+
+  EthArpTst.apply arp_in_resp ~f:(fun ~valid ~data ->
     let open Signal in
-    (pkt.snd.tpa ==: Config.ip_addr_bytes) &: (pkt.snd.oper ==:. 1)
+
+    table_write_port.i.valid <== valid;
+    table_write_port.i.ip <== data.snd.spa;
+    table_write_port.i.mac <== data.snd.sha;
+
+    Signal.vdd
+  );
+
+  let pkt_out = EthArpTst.filter_comb arp_in_req ~f:(fun pkt ->
+    let open Signal in
+    pkt.snd.tpa ==: Config.ip_addr_bytes
   ) |>
 
   EthArpTst.map_comb ~f:(fun pkt ->
@@ -58,9 +73,10 @@ let datapath spec ~(rx : Eth_flow.t) =
       }
     in
     EthArpTst.Data.create eth arp
-  ) |>
+  ) in
 
-  EthArpTst.to_fst_flow spec
+  let eth_out, arp_out = EthArpTst.split_comb pkt_out in
+  Eth_flow.combine spec eth_out (Serializer.serialize spec arp_out)
 
 let create
       (scope : Scope.t)
@@ -69,11 +85,11 @@ let create
       ~(tx : Eth_flow.t)
       ~(query : Signal.t Arp_table.ReadPort.t) =
   
-  let table_write = Arp_table.WritePort.create_wires () in
-  Arp_table.WritePort.I.iter2 table_write.i Arp_table.WritePort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
-  Arp_table.hierarchical ~capacity:Config.arp_table_capacity scope spec ~query_port:query ~write_port:table_write;
+  let table_write_port = Arp_table.WritePort.create_wires () in
   
-  Eth_flow.connect tx (datapath spec ~rx)
+  Arp_table.hierarchical ~capacity:Config.arp_table_capacity scope spec ~query_port:query ~write_port:table_write_port;
+  
+  Eth_flow.connect tx (datapath spec ~rx table_write_port)
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
