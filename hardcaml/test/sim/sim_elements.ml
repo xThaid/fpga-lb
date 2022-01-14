@@ -8,8 +8,8 @@ module FlowEmitter = struct
     ; buff : bytes ref
     ; buff_pos : int ref
     ; transfers : bytes Linked_queue.t
-    ; src : Bits.t ref Flow.Source.t
-    ; dst : Bits.t ref Flow.Dest.t
+    ; src : Bits.t ref Flow.Base.Src.t
+    ; dst : Bits.t ref Flow.Base.Dst.t
     }
 
   let transfer_done t =
@@ -31,16 +31,16 @@ module FlowEmitter = struct
     
     let buf_len = Bytes.length !(t.buff) in
 
-    t.src.data := List.init 4 ~f:(fun i -> get_nth_byte (!(t.buff_pos) + i)) |> Bits.concat_msb;
+    t.src.data.data := List.init 4 ~f:(fun i -> get_nth_byte (!(t.buff_pos) + i)) |> Bits.concat_msb;
     t.src.valid := Bits.of_bool (not (transfer_done t) && t.enabled);
-    t.src.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.buff_pos) - buf_len));
-    t.src.last := Bits.of_bool (4 + !(t.buff_pos) >= buf_len)
+    t.src.data.empty := Bits.of_int ~width:2 (max 0 (4 + !(t.buff_pos) - buf_len));
+    t.src.data.last := Bits.of_bool (4 + !(t.buff_pos) >= buf_len)
 
   let seq t =
     if (Bits.is_vdd !(t.dst.ready)) && not (transfer_done t) && t.enabled then
       t.buff_pos := !(t.buff_pos) + 4
 
-  let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) =
+  let create (src : Bits.t ref Flow.Base.Src.t) (dst : Bits.t ref Flow.Base.Dst.t) =
     {enabled = false;
      buff = ref (Bytes.create 0);
      buff_pos = ref 0;
@@ -60,8 +60,8 @@ end
 module FlowConsumer = struct
   type t =
   { mutable enabled : bool
-  ; src : Bits.t ref Flow.Source.t
-  ; dst : Bits.t ref Flow.Dest.t
+  ; src : Bits.t ref Flow.Base.Src.t
+  ; dst : Bits.t ref Flow.Base.Dst.t
   ; buff : Buffer.t
   ; transfers : bytes list ref
   }
@@ -72,8 +72,8 @@ module FlowConsumer = struct
   let seq t =
     if Bits.is_vdd !(t.src.valid) && Bits.is_vdd !(t.dst.ready) then (
       
-      let valid_cnt = 4 - Bits.to_int !(t.src.empty) in
-      let bytes_to_add = Bits.split_msb ~part_width:8 !(t.src.data) |>
+      let valid_cnt = 4 - Bits.to_int !(t.src.data.empty) in
+      let bytes_to_add = Bits.split_msb ~part_width:8 !(t.src.data.data) |>
        List.map ~f:(fun x -> Bits.to_char x) |>
        List.filteri ~f:(fun i _-> i < valid_cnt) |>
        Bytes.of_char_list
@@ -81,13 +81,13 @@ module FlowConsumer = struct
       
       Buffer.add_bytes t.buff bytes_to_add;
 
-      if Bits.is_vdd !(t.src.last) then (
+      if Bits.is_vdd !(t.src.data.last) then (
         t.transfers := (Buffer.contents_bytes t.buff) :: !(t.transfers);
         Buffer.clear t.buff
       )
     )
 
-  let create (src : Bits.t ref Flow.Source.t) (dst : Bits.t ref Flow.Dest.t) =
+  let create (src : Bits.t ref Flow.Base.Src.t) (dst : Bits.t ref Flow.Base.Dst.t) =
     {enabled = false;
      src;
      dst;
@@ -309,8 +309,8 @@ module TransactionEmitter (Data : Interface.S) = struct
 
 end
 
-module TransactionWithFlowEmitter (Data : Interface.S) = struct
-  module Transaction = Transaction.With_flow(Data)
+module FlowWithHeaderEmitter (Data : Interface.S) = struct
+  module Transaction = Flow.With_header(Data)
   module TstEmitter = TransactionEmitter(Data)
 
   type t =
@@ -351,8 +351,8 @@ module TransactionWithFlowEmitter (Data : Interface.S) = struct
 
 end
 
-module TransactionWithFlowConsumer (Data : Interface.S) = struct
-  module Transaction = Transaction.With_flow(Data)
+module FlowWithHeaderConsumer (Data : Interface.S) = struct
+  module Transaction = Flow.With_header(Data)
   module TstConsumer = TransactionConsumer(Data)
 
   type t =

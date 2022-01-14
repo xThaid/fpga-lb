@@ -167,8 +167,8 @@ end
 
 let%expect_test "arp" =
   let module Sim = Sim.Sim(ArpSim) in
-  let module Emitter = TransactionWithFlowEmitter(Common.EthernetHeader) in
-  let module Consumer = TransactionWithFlowConsumer(Common.EthernetHeader) in
+  let module Emitter = FlowWithHeaderEmitter(Common.EthernetHeader) in
+  let module Consumer = FlowWithHeaderConsumer(Common.EthernetHeader) in
   
   let sim = Sim.create ~name:"arp" ~gtkwave:false ~trace:false () in
 

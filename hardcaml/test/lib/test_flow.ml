@@ -23,14 +23,14 @@ module TestDataAligned = struct
 end
 
 module SerializerSim (Data : Interface.S) = struct
-  module Serializer = Transaction.Serializer(Data)
+  module Serializer = Flow.Serializer(Data)
   module Transaction = Transaction.Make(Data)
 
   module I = struct
     type 'a t =
         { clock : 'a
         ; reset : 'a
-        ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+        ; sink_tx : 'a Flow.Base.Dst.t [@rtlprefix "sink_"]
         ; tst : 'a Transaction.Src.t [@rtlprefix "tst_"]
         }
     [@@deriving sexp_of, hardcaml]
@@ -38,7 +38,7 @@ module SerializerSim (Data : Interface.S) = struct
   
   module O = struct
     type 'a t =
-      { sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      { sink_rx : 'a Flow.Base.Src.t [@rtlprefix "sink_"]
       ; tst : 'a Transaction.Dst.t [@rtlprefix "tst_"]
       }
     [@@deriving sexp_of, hardcaml]
@@ -47,15 +47,15 @@ module SerializerSim (Data : Interface.S) = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let sink_rx = Flow.Source.Of_signal.wires () in
+    let sink_rx = Flow.Base.Src.Of_signal.wires () in
 
-    let sink = Flow.t_of_if sink_rx i.sink_tx in
+    let sink = Flow.Base.t_of_if sink_rx i.sink_tx in
 
     let tst = Transaction.t_of_if i.tst (Transaction.Dst.Of_signal.wires ()) in
 
-    Flow.connect sink (Serializer.serialize spec tst);
+    Flow.Base.connect sink (Serializer.serialize spec tst);
     
-    {O.sink_rx = sink.src; tst = Transaction.outputs tst}
+    {O.sink_rx = sink.s; tst = Transaction.outputs tst}
 
 end
 
@@ -162,14 +162,14 @@ let%expect_test "transaction_serializer_aligned" =
 
 
 module DeserializerSim (Data : Interface.S) = struct
-  module Serializer = Transaction.Serializer(Data)
+  module Serializer = Flow.Serializer(Data)
   module Transaction = Transaction.Make(Data)
 
   module I = struct
     type 'a t =
         { clock : 'a
         ; reset : 'a
-        ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
+        ; source_tx : 'a Flow.Base.Src.t [@rtlprefix "source_"]
         ; tst : 'a Transaction.Dst.t [@rtlprefix "tst_"]
         }
     [@@deriving sexp_of, hardcaml]
@@ -177,7 +177,7 @@ module DeserializerSim (Data : Interface.S) = struct
   
   module O = struct
     type 'a t =
-      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
+      { source_rx : 'a Flow.Base.Dst.t [@rtlprefix "source_"]
       ; tst : 'a Transaction.Src.t [@rtlprefix "tst_"]
       }
     [@@deriving sexp_of, hardcaml]
@@ -186,13 +186,13 @@ module DeserializerSim (Data : Interface.S) = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let source = Flow.t_of_if i.source_tx (Flow.Dest.Of_signal.wires ()) in
+    let source = Flow.Base.t_of_if i.source_tx (Flow.Base.Dst.Of_signal.wires ()) in
 
     let tst = Serializer.deserialize spec source in
     let tst_s, tst_d = Transaction.if_of_t tst in
     Signal.(tst_d.ready <== i.tst.ready);
 
-    {O.source_rx = source.dst; tst = tst_s}
+    {O.source_rx = source.d; tst = tst_s}
 
 end
 
@@ -268,16 +268,16 @@ let%expect_test "transaction_deserializer" =
     898e55e1d82bf24b7a30f8a33080f83a|}]
 
 
-module WithFlowSim (Data : Interface.S) = struct
-  module With_flow = Transaction.With_flow(Data)
+module WithHeaderSim (Data : Interface.S) = struct
+  module With_flow = Flow.With_header(Data)
   module Transaction = Transaction.Make(Data)
 
   module I = struct
     type 'a t =
         { clock : 'a
         ; reset : 'a
-        ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
-        ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+        ; source_tx : 'a Flow.Base.Src.t [@rtlprefix "source_"]
+        ; sink_tx : 'a Flow.Base.Dst.t [@rtlprefix "sink_"]
         ; tst_in : 'a Transaction.Src.t [@rtlprefix "tstin_"]
         ; tst_out : 'a Transaction.Dst.t [@rtlprefix "tstout_"]
         }
@@ -286,8 +286,8 @@ module WithFlowSim (Data : Interface.S) = struct
   
   module O = struct
     type 'a t =
-      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
-      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      { source_rx : 'a Flow.Base.Dst.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Base.Src.t [@rtlprefix "sink_"]
       ; tst_in : 'a Transaction.Dst.t [@rtlprefix "tstin_"]
       ; tst_out : 'a Transaction.Src.t [@rtlprefix "tstout_"]
       }
@@ -297,15 +297,15 @@ module WithFlowSim (Data : Interface.S) = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let source = Flow.t_of_if i.source_tx (Flow.Dest.Of_signal.wires ()) in
+    let source = Flow.Base.t_of_if i.source_tx (Flow.Base.Dst.Of_signal.wires ()) in
     let tst_in = Transaction.t_of_if i.tst_in (Transaction.Dst.Of_signal.wires ()) in
     let combined = With_flow.combine spec tst_in source in
 
     Transaction.Dst.Of_signal.assign (Transaction.outputs combined.tst) i.tst_out;
-    Flow.Dest.Of_signal.assign combined.flow.dst i.sink_tx;
+    Flow.Base.Dst.Of_signal.assign combined.flow.d i.sink_tx;
 
-    { O.source_rx = source.dst
-    ; sink_rx = combined.flow.src
+    { O.source_rx = source.d
+    ; sink_rx = combined.flow.s
     ; tst_in = (Transaction.outputs tst_in)
     ; tst_out = (Transaction.inputs combined.tst);
     }
@@ -313,8 +313,8 @@ module WithFlowSim (Data : Interface.S) = struct
 end
     
 let%expect_test "transaction_with_flow" =
-  let module WithFlowSim = WithFlowSim(TestData) in
-  let module Sim = Sim.Sim(WithFlowSim) in
+  let module WithHeaderSim = WithHeaderSim(TestData) in
+  let module Sim = Sim.Sim(WithHeaderSim) in
   let module Emitter = TransactionEmitter(TestData) in
   let module Consumer = TransactionConsumer(TestData) in
   
@@ -407,22 +407,22 @@ let%expect_test "transaction_with_flow" =
 
 module PacketizerFullSim (HeaderData : Interface.S) = struct
   module Header = Transaction.Make(HeaderData)
-  module Serializer = Transaction.Serializer(HeaderData)
+  module Serializer = Flow.Serializer(HeaderData)
 
   module I = struct
     type 'a t =
        { clock : 'a
        ; reset : 'a
-       ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
-       ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+       ; source_tx : 'a Flow.Base.Src.t [@rtlprefix "source_"]
+       ; sink_tx : 'a Flow.Base.Dst.t [@rtlprefix "sink_"]
        }
     [@@deriving sexp_of, hardcaml]
   end
   
   module O = struct
     type 'a t =
-      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
-      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      { source_rx : 'a Flow.Base.Dst.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Base.Src.t [@rtlprefix "sink_"]
       }
     [@@deriving sexp_of, hardcaml]
   end
@@ -430,13 +430,13 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let source_rx = Flow.Dest.Of_signal.wires () in
-    let sink_rx = Flow.Source.Of_signal.wires () in
+    let source_rx = Flow.Base.Dst.Of_signal.wires () in
+    let sink_rx = Flow.Base.Src.Of_signal.wires () in
 
-    let sink = Flow.t_of_if sink_rx i.sink_tx in
-    let source = Flow.t_of_if i.source_tx source_rx in
+    let sink = Flow.Base.t_of_if sink_rx i.sink_tx in
+    let source = Flow.Base.t_of_if i.source_tx source_rx in
 
-    let f1, f2 = Flow.split spec ~hdr_length:Header.data_len ~source in
+    let f1, f2 = Flow.Base.split spec ~hdr_length:Header.data_len ~source in
     let tst = Serializer.deserialize spec f1 in
 
     let hdr_transf = Header.map_comb tst ~f:(fun _ ->
@@ -444,12 +444,12 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     ) in
 
     let f1 = Serializer.serialize spec hdr_transf in
-    let out_flow = Flow.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:f2 in
+    let out_flow = Flow.Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:f2 in
 
-    Flow.connect sink out_flow;
+    Flow.Base.connect sink out_flow;
     
-    {O.source_rx = source.dst;
-      sink_rx = sink.src;
+    {O.source_rx = source.d;
+      sink_rx = sink.s;
     }
 end
 
@@ -561,14 +561,14 @@ let%expect_test "packetizer_full_fast_unaligned" =
 
 module DepacketizerSim (HeaderData : Interface.S) = struct
   module Header = Transaction.Make(HeaderData)
-  module Serializer = Transaction.Serializer(HeaderData)
+  module Serializer = Flow.Serializer(HeaderData)
 
   module I = struct
     type 'a t =
        { clock : 'a
        ; reset : 'a
-       ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
-       ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+       ; source_tx : 'a Flow.Base.Src.t [@rtlprefix "source_"]
+       ; sink_tx : 'a Flow.Base.Dst.t [@rtlprefix "sink_"]
        ; header : 'a Header.Dst.t [@rtlprefix "hdr_"]
        }
     [@@deriving sexp_of, hardcaml]
@@ -576,8 +576,8 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
   
   module O = struct
     type 'a t =
-      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
-      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      { source_rx : 'a Flow.Base.Dst.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Base.Src.t [@rtlprefix "sink_"]
       ; header : 'a Header.Src.t [@rtlprefix "hdr_"]
       }
     [@@deriving sexp_of, hardcaml]
@@ -586,22 +586,22 @@ module DepacketizerSim (HeaderData : Interface.S) = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let source_rx = Flow.Dest.Of_signal.wires () in
-    let sink_rx = Flow.Source.Of_signal.wires () in
+    let source_rx = Flow.Base.Dst.Of_signal.wires () in
+    let sink_rx = Flow.Base.Src.Of_signal.wires () in
 
-    let sink = Flow.t_of_if sink_rx i.sink_tx in
-    let source = Flow.t_of_if i.source_tx source_rx in
+    let sink = Flow.Base.t_of_if sink_rx i.sink_tx in
+    let source = Flow.Base.t_of_if i.source_tx source_rx in
 
-    let f1, sink2 = Flow.split spec ~hdr_length:Header.data_len ~source in
+    let f1, sink2 = Flow.Base.split spec ~hdr_length:Header.data_len ~source in
     let hdr = Serializer.deserialize spec f1 in
     let hdr_s, hdr_d = Header.if_of_t hdr in
 
     Header.Dst.Of_signal.assign hdr_d i.header;
 
-    Flow.connect sink sink2;
+    Flow.Base.connect sink sink2;
     
-    {O.source_rx = source.dst;
-      sink_rx = sink.src;
+    {O.source_rx = source.d;
+      sink_rx = sink.s;
       header = hdr_s;
     }
 end
@@ -679,14 +679,14 @@ let%expect_test "depacketizer_unaligned" =
 
 module PacketizerSim (HeaderData : Interface.S) = struct
   module Header = Transaction.Make(HeaderData)
-  module Serializer = Transaction.Serializer(HeaderData)
+  module Serializer = Flow.Serializer(HeaderData)
 
   module I = struct
     type 'a t =
         { clock : 'a
         ; reset : 'a
-        ; source_tx : 'a Flow.Source.t [@rtlprefix "source_"]
-        ; sink_tx : 'a Flow.Dest.t [@rtlprefix "sink_"]
+        ; source_tx : 'a Flow.Base.Src.t [@rtlprefix "source_"]
+        ; sink_tx : 'a Flow.Base.Dst.t [@rtlprefix "sink_"]
         ; header : 'a Header.Src.t [@rtlprefix "hdr_"]
         }
     [@@deriving sexp_of, hardcaml]
@@ -694,8 +694,8 @@ module PacketizerSim (HeaderData : Interface.S) = struct
   
   module O = struct
     type 'a t =
-      { source_rx : 'a Flow.Dest.t [@rtlprefix "source_"]
-      ; sink_rx : 'a Flow.Source.t [@rtlprefix "sink_"]
+      { source_rx : 'a Flow.Base.Dst.t [@rtlprefix "source_"]
+      ; sink_rx : 'a Flow.Base.Src.t [@rtlprefix "sink_"]
       ; header : 'a Header.Dst.t [@rtlprefix "hdr_"]
       }
     [@@deriving sexp_of, hardcaml]
@@ -704,20 +704,20 @@ module PacketizerSim (HeaderData : Interface.S) = struct
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let source_rx = Flow.Dest.Of_signal.wires () in
-    let sink_rx = Flow.Source.Of_signal.wires () in
+    let source_rx = Flow.Base.Dst.Of_signal.wires () in
+    let sink_rx = Flow.Base.Src.Of_signal.wires () in
 
-    let sink = Flow.t_of_if sink_rx i.sink_tx in
-    let source = Flow.t_of_if i.source_tx source_rx in
+    let sink = Flow.Base.t_of_if sink_rx i.sink_tx in
+    let source = Flow.Base.t_of_if i.source_tx source_rx in
     
     let hdr = Header.t_of_if i.header (Header.Dst.Of_signal.wires ()) in
 
     let f1 = Serializer.serialize spec hdr in
-    let out_flow = Flow.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:source in
-    Flow.connect sink out_flow;
+    let out_flow = Flow.Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:source in
+    Flow.Base.connect sink out_flow;
     
-    {O.source_rx = source.dst
-    ; sink_rx = sink.src
+    {O.source_rx = source.d
+    ; sink_rx = sink.s
     ; header = Header.outputs hdr
     }
 end

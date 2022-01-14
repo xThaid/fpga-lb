@@ -1,6 +1,6 @@
 open Hardcaml
 
-module Eth_flow = Transaction.With_flow(Common.EthernetHeader)
+module Eth_flow = Flow.With_header(Common.EthernetHeader)
 
 module I = struct
   type 'a t =
