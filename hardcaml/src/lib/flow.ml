@@ -458,11 +458,11 @@ module Serializer (Data : Interface.S) = struct
 end
 
 module With_header (Data : Interface.S) = struct
-  module Tst = Transaction.Make(Data)
+  module Header = Transaction.Make(Data)
 
   module Src = struct
     type 'a t =
-      { tst : 'a Tst.Src.t
+      { tst : 'a Header.Src.t
       ; flow : 'a Base.Src.t
       }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -470,27 +470,29 @@ module With_header (Data : Interface.S) = struct
 
   module Dst = struct
     type 'a t =
-      { tst : 'a Tst.Dst.t
+      { tst : 'a Header.Dst.t
       ; flow : 'a Base.Dst.t
       }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
 
   type t = 
-    { tst : Tst.t
+    { tst : Header.t
     ; flow : Base.t
     }
 
   let t_of_if (src : Signal.t Src.t) (dst : Signal.t Dst.t)= 
-    let tst = Tst.t_of_if src.tst dst.tst in
+    let tst = Header.t_of_if src.tst dst.tst in
     let flow = Base.t_of_if src.flow dst.flow in
     {tst; flow}
   let if_of_t (t : t) =
-    let tst_s, tst_d = Tst.if_of_t t.tst in
+    let tst_s, tst_d = Header.if_of_t t.tst in
     let flow_src, flow_dst = Base.if_of_t t.flow in
     {Src.tst = tst_s; flow = flow_src}, {Dst.tst = tst_d; flow = flow_dst}
   let create_wires () = 
     t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
+
+  let create hdr flow = {tst = hdr; flow}
 
   let connect t1 t2 =
     let i1, o1 = if_of_t t1 in
@@ -498,74 +500,94 @@ module With_header (Data : Interface.S) = struct
     Src.Of_signal.assign i1 i2;
     Dst.Of_signal.assign o2 o1
 
-  let combine spec (tst_in : Tst.t) (flow_in : Base.t) =
+  let synchronize spec (flow : t) =
     let open Signal in
 
-    let tst_data = Data.Of_always.reg spec in
-    let tst_valid = Always.Variable.reg ~width:1 spec in
-    let tst_out = Tst.create ~valid:tst_valid.value ~data:(Data.Of_always.value tst_data) in
+    let hdr_enabled_next = Always.Variable.wire ~default:gnd in
+    let flow_enabled_next = Always.Variable.wire ~default:gnd in
 
-    let buffer_en = Always.Variable.reg ~width:1 spec in
-    let flow_out = Base.bufferize spec flow_in in
-    let flow_out = Base.gate ~enable:buffer_en.value flow_out in
+    let hdr_out = Header.bufferized_gate spec flow.tst ~enable:hdr_enabled_next.value in
+    let flow_out = Base.bufferized_gate spec flow.flow ~enable:flow_enabled_next.value in
 
-    let module SM = struct
-      type t = Idle | Busy | Wait
+    let module HdrSM = struct
+      type t = HdrIdle | HdrWait | HdrDone
       [@@deriving sexp_of, compare, enumerate]
     end in
 
-    let sm = Always.State_machine.create (module SM) ~enable:vdd spec in
+    let module FlowSM = struct
+      type t = FlowForward | FlowWait | FlowDone
+      [@@deriving sexp_of, compare, enumerate]
+    end in
+
+    let sm_hdr = Always.State_machine.create (module HdrSM) ~enable:vdd spec in
+    let sm_flow = Always.State_machine.create (module FlowSM) ~enable:vdd spec in
 
     Always.(compile [
-    sm.switch [
-      Idle, [
-        when_ (Tst.is_fired tst_in) [
-          Data.Of_always.assign tst_data (Tst.data tst_in);
-          tst_valid <--. 1;
-          buffer_en <--. 1;
-
-          sm.set_next Busy;
+    sm_hdr.switch [
+      HdrIdle, [
+        hdr_enabled_next <--. 1;
+        when_ (Header.is_fired flow.tst) [
+          hdr_enabled_next <--. 0;
+          sm_hdr.set_next HdrWait;
         ]
       ];
 
-      Busy, [
-        when_ (Tst.is_fired tst_out) [
-          tst_valid <--. 0;
-        ];
+      HdrWait, [
+        when_ (Header.is_fired hdr_out) [
+          sm_hdr.set_next HdrDone;
+        ]
+      ];
 
+      HdrDone, []
+    ];
+
+    sm_flow.switch [
+      FlowForward, [
+        flow_enabled_next <--. 1;
+        when_ (Base.is_fired_last flow.flow) [
+          flow_enabled_next <--. 0;
+          sm_flow.set_next FlowWait;
+        ]
+      ];
+
+      FlowWait, [
         when_ (Base.is_fired_last flow_out) [
-          buffer_en <--. 0;
-
-          if_ (Tst.is_fired tst_out |: ~:(tst_valid.value)) [
-            sm.set_next Idle;
-          ] [
-            sm.set_next Wait;
-          ];
+          sm_flow.set_next FlowDone;
         ]
       ];
 
-      Wait, [
-        when_ (Tst.is_fired tst_out) [
-          tst_valid <--. 0;
-          sm.set_next Idle;
-        ];
-      ];
+      FlowDone, []
+    ];
+
+    when_ (((sm_hdr.is HdrDone) |: (Header.is_fired hdr_out)) &: ((sm_flow.is FlowDone) |: (Base.is_fired_last flow_out))) [
+      hdr_enabled_next <--. 1;
+      flow_enabled_next <--. 1;
+      sm_hdr.set_next HdrIdle;
+      sm_flow.set_next FlowForward;
     ]
+
     ]);
 
-    assign (Tst.ready tst_in) (sm.is Idle); (* TODO: this can be changed to reduce latency *)
-
-    {tst = tst_out; flow = flow_out}
+    {tst = hdr_out; flow = flow_out}
 
   let from_flow spec (flow : Base.t) =
     let module Serializer = Serializer(Data) in
-    let f1, f2 = Base.split spec ~hdr_length:Tst.data_len ~source:flow in
+    let f1, f2 = Base.split spec ~hdr_length:Header.data_len ~source:flow in
     let tst = Serializer.deserialize spec f1 in
-    combine spec tst f2
+    synchronize spec (create tst f2)
 
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
     let f1 = Serializer.serialize spec flow.tst in
-    Base.join spec ~hdr_length:Tst.data_len ~source1:f1 ~source2:flow.flow
+    Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow
+
+  let arbitrate spec sources =
+
+    List.iter sources ~f:(fun _source -> 
+      ()
+    );
+
+    let _granted_onehot = Arbiter.round_robin spec in 
+    ()
 
 end

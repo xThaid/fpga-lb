@@ -2,6 +2,7 @@ open Base
 open Hardcaml
 
 module Eth_flow = Flow.With_header(Common.EthernetHeader)
+module EthTst = Transaction.Make(Common.EthernetHeader)
 module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket)
 
 module Table = struct
@@ -319,7 +320,7 @@ let datapath spec ~(rx : Eth_flow.t) (table_write_port : Signal.t Table.WritePor
   ) in
 
   let eth_out, arp_out = EthArpTst.split_comb pkt_out in
-  Eth_flow.combine spec eth_out (Serializer.serialize spec arp_out)
+  Eth_flow.create (EthTst.bufferize spec eth_out) (Serializer.serialize spec arp_out)
 
 let create
       (scope : Scope.t)

@@ -242,11 +242,9 @@ let%expect_test "arp" =
 
   Sim.cycle_n sim 50;
 
-  Sim.expect_trace_digest sim;
   Consumer.expect_transfers consumer;
 
   [%expect {|
-    b8f7f6529e1135294313670334868ea0
     (consumed
      (((dest_mac 010203040506) (src_mac aabbccddeeff) (ether_type 0806))
       ((dest_mac e1e2e3e4e5e6) (src_mac aabbccddeeff) (ether_type 0806))

@@ -99,6 +99,20 @@ module Make (Data : Interface.S) = struct
   
     tst_out
 
+  let bufferized_gate spec t ~enable = 
+    let open Signal in
+    let tst = create ~valid:(t.s.valid &: (reg spec enable)) ~data:t.s.data in
+    t.d.ready <== reg spec (tst.d.ready &: enable);
+    bufferize spec ~ready_ahead:true tst
+
+  let pipe_source spec tst_in = 
+    let open Signal in
+
+    let tst_out = create_wires () in
+    Src.Of_signal.assign tst_out.s (Src.Of_signal.reg ~enable:tst_in.d.ready spec tst_in.s); 
+    tst_in.d.ready <== (tst_out.d.ready |: ~:(tst_out.s.valid));
+    tst_out
+
 end
 
 module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct

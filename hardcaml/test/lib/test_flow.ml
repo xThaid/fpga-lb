@@ -299,7 +299,7 @@ module WithHeaderSim (Data : Interface.S) = struct
 
     let source = Flow.Base.t_of_if i.source_tx (Flow.Base.Dst.Of_signal.wires ()) in
     let tst_in = Transaction.t_of_if i.tst_in (Transaction.Dst.Of_signal.wires ()) in
-    let combined = With_flow.combine spec tst_in source in
+    let combined = With_flow.synchronize spec (With_flow.create tst_in source) in
 
     Transaction.Dst.Of_signal.assign (Transaction.outputs combined.tst) i.tst_out;
     Flow.Base.Dst.Of_signal.assign combined.flow.d i.sink_tx;
@@ -312,13 +312,13 @@ module WithHeaderSim (Data : Interface.S) = struct
 
 end
     
-let%expect_test "transaction_with_flow" =
+let%expect_test "flow_with_hdr_synchronize" =
   let module WithHeaderSim = WithHeaderSim(TestData) in
   let module Sim = Sim.Sim(WithHeaderSim) in
   let module Emitter = TransactionEmitter(TestData) in
   let module Consumer = TransactionConsumer(TestData) in
   
-  let sim = Sim.create ~name:"transaction_with_flow" ~gtkwave:false () ~trace:false in
+  let sim = Sim.create ~name:"flow_with_hdr_synchronize" ~gtkwave:false () ~trace:false in
 
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
@@ -340,6 +340,8 @@ let%expect_test "transaction_with_flow" =
   FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:48 18);
   FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:80 33);
   FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:128 16);
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:160 16);
+  FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:192 16);
 
   let create_data data = TestData.t_of_sexp String.t_of_sexp (Parsexp.Single.parse_string_exn data) in
 
@@ -348,6 +350,8 @@ let%expect_test "transaction_with_flow" =
   Emitter.add_transfer tst_emitter (create_data "((field1 303132333435) (field2 36) (field3 3738))");
   Emitter.add_transfer tst_emitter (create_data "((field1 404142434445) (field2 46) (field3 4748))");
   Emitter.add_transfer tst_emitter (create_data "((field1 505152535455) (field2 56) (field3 5758))");
+  Emitter.add_transfer tst_emitter (create_data "((field1 606162636465) (field2 66) (field3 6768))");
+  Emitter.add_transfer tst_emitter (create_data "((field1 707172737475) (field2 76) (field3 7778))");
 
   Sim.cycle_n sim 1;
   flow_emitter.enabled <- true;
@@ -375,11 +379,10 @@ let%expect_test "transaction_with_flow" =
   Sim.cycle_n sim 2;
   flow_emitter.enabled <- true;
 
-  Sim.cycle_n sim 10;
+  Sim.cycle_n sim 30;
   
   Consumer.expect_reads tst_consumer;
   FlowConsumer.expect_data flow_consumer;
-  Sim.expect_trace_digest sim;
 
   [%expect {|
     (consumed
@@ -387,7 +390,9 @@ let%expect_test "transaction_with_flow" =
       ((field1 202122232425) (field2 26) (field3 2728))
       ((field1 303132333435) (field2 36) (field3 3738))
       ((field1 404142434445) (field2 46) (field3 4748))
-      ((field1 505152535455) (field2 56) (field3 5758))))
+      ((field1 505152535455) (field2 56) (field3 5758))
+      ((field1 606162636465) (field2 66) (field3 6768))
+      ((field1 707172737475) (field2 76) (field3 7778))))
     01020304 05060708 090a0b0c 0d0e0f10
     11121314 15
 
@@ -402,7 +407,9 @@ let%expect_test "transaction_with_flow" =
 
     80818283 84858687 88898a8b 8c8d8e8f
 
-    063db41ba61d522b9d9ffb66cb52043e|}]
+    a0a1a2a3 a4a5a6a7 a8a9aaab acadaeaf
+
+    c0c1c2c3 c4c5c6c7 c8c9cacb cccdcecf|}]
 
 
 module PacketizerFullSim (HeaderData : Interface.S) = struct
