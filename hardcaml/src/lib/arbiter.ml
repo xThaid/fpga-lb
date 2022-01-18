@@ -13,29 +13,28 @@ let round_robin spec ~request ~acknowledge =
   let acknowledge_mask = concat_lsb acknowledge in
 
   let mask = Always.Variable.reg ~width:n spec in
-  let granted_onehot = Always.Variable.reg ~width:n spec in
-  let granted_valid = reduce (bits_lsb granted_onehot.value) ~f:( |: ) in
+
+  let granted_onehot = Always.Variable.wire ~default:(zero n) in
+  let granted_reg_onehot = Always.Variable.reg ~width:n spec in
+  let granted_reg_valid = reduce (bits_lsb granted_reg_onehot.value) ~f:( |: ) in
 
   let selected = Arbiters.Round_robin_with_priority.combinational 
     (module Signal) ~index:(Arbiters.Index.Offset mask.value) ~data:request_with_idx
   in
-  let selected_onehot = binary_to_onehot selected.value in
-
-  let select_next () = Always.(
-    when_ selected.valid [
-      granted_onehot <-- selected_onehot;
-      mask <-- Arbiters.Index.next_mask mask.value;
-    ]
-  ) in
+  let selected_onehot = sel_bottom (binary_to_onehot selected.value) n in
 
   Always.(compile [
-    if_ granted_valid [
+    if_ granted_reg_valid [
+      granted_onehot <-- granted_reg_onehot.value;
       when_ (granted_onehot.value &: acknowledge_mask) [
-        granted_onehot <--. 0;
-        select_next ();
+        granted_reg_onehot <--. 0;
       ]
     ] [
-      select_next ();
+      when_ selected.valid [
+        granted_onehot <-- selected_onehot;
+        granted_reg_onehot <-- selected_onehot;
+        mask <-- Arbiters.Index.next_mask mask.value;
+      ]
     ]
   ]);
 

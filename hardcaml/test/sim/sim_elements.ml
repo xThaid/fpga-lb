@@ -310,19 +310,17 @@ module TransactionEmitter (Data : Interface.S) = struct
 end
 
 module FlowWithHeaderEmitter (Data : Interface.S) = struct
-  module Transaction = Flow.With_header(Data)
+  module Flow = Flow.With_header(Data)
   module TstEmitter = TransactionEmitter(Data)
 
   type t =
     { mutable enabled : bool
-    ; transfers : (string Data.t * bytes) Linked_queue.t
     ; tst_emit : TstEmitter.t
     ; flow_emit : FlowEmitter.t
     }
 
-  let create (src : Bits.t ref Transaction.Src.t) (dst : Bits.t ref Transaction.Dst.t) = 
+  let create (src : Bits.t ref Flow.Src.t) (dst : Bits.t ref Flow.Dst.t) = 
     { enabled = false
-    ; transfers = Linked_queue.create ()
     ; tst_emit = TstEmitter.create src.tst dst.tst
     ; flow_emit = FlowEmitter.create src.flow dst.flow
     }
@@ -330,14 +328,6 @@ module FlowWithHeaderEmitter (Data : Interface.S) = struct
   let comb t =
     t.tst_emit.enabled <- t.enabled;
     t.flow_emit.enabled <- t.enabled;
-
-    if TstEmitter.transfer_done t.tst_emit && FlowEmitter.transfer_done t.flow_emit then (
-      match Linked_queue.dequeue t.transfers with
-      | None -> ()
-      | Some(tst_data, flow_data) ->
-        TstEmitter.add_transfer t.tst_emit tst_data;
-        FlowEmitter.add_transfer t.flow_emit flow_data
-    );
 
     TstEmitter.comb t.tst_emit;
     FlowEmitter.comb t.flow_emit
@@ -347,12 +337,13 @@ module FlowWithHeaderEmitter (Data : Interface.S) = struct
     FlowEmitter.seq t.flow_emit
 
   let add_transfer t tst_data flow_data =
-    Linked_queue.enqueue t.transfers (tst_data, flow_data)
+    TstEmitter.add_transfer t.tst_emit tst_data;
+    FlowEmitter.add_transfer t.flow_emit flow_data;
 
 end
 
 module FlowWithHeaderConsumer (Data : Interface.S) = struct
-  module Transaction = Flow.With_header(Data)
+  module Flow = Flow.With_header(Data)
   module TstConsumer = TransactionConsumer(Data)
 
   type t =
@@ -362,7 +353,7 @@ module FlowWithHeaderConsumer (Data : Interface.S) = struct
     ; flow_cons : FlowConsumer.t
     }
 
-  let create (src : Bits.t ref Transaction.Src.t) (dst : Bits.t ref Transaction.Dst.t) = 
+  let create (src : Bits.t ref Flow.Src.t) (dst : Bits.t ref Flow.Dst.t) = 
     { enabled = false
     ; transfers = Linked_queue.create ()
     ; tst_cons = TstConsumer.create src.tst dst.tst

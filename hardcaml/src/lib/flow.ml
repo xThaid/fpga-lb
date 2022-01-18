@@ -500,7 +500,17 @@ module With_header (Data : Interface.S) = struct
     Src.Of_signal.assign i1 i2;
     Dst.Of_signal.assign o2 o1
 
-  let synchronize spec (flow : t) =
+  let bufferize spec t = 
+    create (Header.bufferize spec t.tst) (Base.bufferize spec t.flow)
+
+  module FlowStatus = struct
+    type t =
+      { valid : Signal.t
+      ; last_fired : Signal.t
+      }
+  end
+
+  let synchronize_with_status spec (flow : t) =
     let open Signal in
 
     let hdr_enabled_next = Always.Variable.wire ~default:gnd in
@@ -508,6 +518,8 @@ module With_header (Data : Interface.S) = struct
 
     let hdr_out = Header.bufferized_gate spec flow.tst ~enable:hdr_enabled_next.value in
     let flow_out = Base.bufferized_gate spec flow.flow ~enable:flow_enabled_next.value in
+
+    let last = Always.Variable.wire ~default:gnd in
 
     let module HdrSM = struct
       type t = HdrIdle | HdrWait | HdrDone
@@ -560,6 +572,7 @@ module With_header (Data : Interface.S) = struct
     ];
 
     when_ (((sm_hdr.is HdrDone) |: (Header.is_fired hdr_out)) &: ((sm_flow.is FlowDone) |: (Base.is_fired_last flow_out))) [
+      last <--. 1;
       hdr_enabled_next <--. 1;
       flow_enabled_next <--. 1;
       sm_hdr.set_next HdrIdle;
@@ -568,7 +581,11 @@ module With_header (Data : Interface.S) = struct
 
     ]);
 
-    {tst = hdr_out; flow = flow_out}
+    
+    {tst = hdr_out; flow = flow_out}, {FlowStatus.valid = Base.valid flow_out |: Header.valid hdr_out; last_fired = last.value}
+
+  let synchronize spec (flow : t) =
+    fst (synchronize_with_status spec flow)
 
   let from_flow spec (flow : Base.t) =
     let module Serializer = Serializer(Data) in
@@ -582,12 +599,26 @@ module With_header (Data : Interface.S) = struct
     Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow
 
   let arbitrate spec sources =
+    let open Signal in
 
-    List.iter sources ~f:(fun _source -> 
-      ()
+    let synchronized = List.map sources ~f:(synchronize_with_status spec) in
+    let request, acknowledge = List.map synchronized ~f:(fun (_, s) -> s.valid, s.last_fired) |> List.unzip in
+
+    let granted_onehot = Arbiter.round_robin spec ~request ~acknowledge in
+    let granted = onehot_to_binary granted_onehot in
+    let granted_valid = reduce (bits_lsb granted_onehot) ~f:( |: ) in
+    
+    let src = Src.Of_signal.mux granted (List.map synchronized ~f:(fun (s, _) -> fst (if_of_t s))) in
+    let src = Src.Of_signal.mux2 granted_valid src (Src.map Src.port_widths ~f:zero) in
+    
+    let dst = Dst.Of_signal.wires () in
+
+    List.iteri synchronized ~f:(fun i (s, _) -> 
+      let _, source_dst = if_of_t s in
+      let sel = bit granted_onehot i in
+      Dst.Of_signal.assign source_dst (Dst.Of_signal.mux2 sel dst (Dst.map Dst.port_widths ~f:zero))
     );
 
-    let _granted_onehot = Arbiter.round_robin spec in 
-    ()
+    bufferize spec (t_of_if src dst)
 
 end

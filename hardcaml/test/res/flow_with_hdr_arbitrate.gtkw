@@ -1,0 +1,104 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Tue Jan 18 20:14:07 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/flow_with_hdr_arbitrate.gtkw"
+[timestart] 735
+[size] 1920 1023
+[pos] -1 -1
+*-4.000000 800 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 339
+[sst_expanded] 1
+[sst_vpaned_height] 290
+@28
+inputs.clock
+@200
+-
+@22
+inputs.source1_flow_data[31:0]
+@28
+inputs.source1_flow_empty[1:0]
+inputs.source1_flow_last
+inputs.source1_flow_valid
+@22
+inputs.source1_tst_field1[47:0]
+inputs.source1_tst_field2[7:0]
+inputs.source1_tst_field3[15:0]
+@28
+inputs.source1_tst_valid
+outputs.source1_flow_ready
+outputs.source1_tst_ready
+@200
+-
+@22
+[color] 1
+inputs.source2_flow_data[31:0]
+@28
+[color] 1
+inputs.source2_flow_empty[1:0]
+[color] 1
+inputs.source2_flow_last
+[color] 1
+inputs.source2_flow_valid
+@22
+[color] 1
+inputs.source2_tst_field1[47:0]
+[color] 1
+inputs.source2_tst_field2[7:0]
+[color] 1
+inputs.source2_tst_field3[15:0]
+@28
+[color] 1
+inputs.source2_tst_valid
+[color] 1
+outputs.source2_flow_ready
+[color] 1
+outputs.source2_tst_ready
+@200
+-
+@22
+inputs.source3_flow_data[31:0]
+@28
+inputs.source3_flow_empty[1:0]
+inputs.source3_flow_last
+inputs.source3_flow_valid
+@22
+inputs.source3_tst_field1[47:0]
+inputs.source3_tst_field2[7:0]
+inputs.source3_tst_field3[15:0]
+@28
+inputs.source3_tst_valid
+outputs.source3_flow_ready
+outputs.source3_tst_ready
+@200
+-
+@22
+[color] 2
+outputs.sink_flow_data[31:0]
+@28
+[color] 2
+outputs.sink_flow_empty[1:0]
+[color] 2
+outputs.sink_flow_last
+[color] 2
+outputs.sink_flow_valid
+@22
+[color] 2
+outputs.sink_tst_field1[47:0]
+[color] 2
+outputs.sink_tst_field2[7:0]
+[color] 2
+outputs.sink_tst_field3[15:0]
+@28
+[color] 2
+outputs.sink_tst_valid
+[color] 2
+inputs.sink_flow_ready
+[color] 2
+inputs.sink_tst_ready
+@200
+-
+[pattern_trace] 1
+[pattern_trace] 0
