@@ -503,6 +503,9 @@ module With_header (Data : Interface.S) = struct
   let bufferize spec t = 
     create (Header.bufferize spec t.hdr) (Base.bufferize spec t.flow)
 
+  let gate t ~enable = 
+    create (Header.gate t.hdr ~enable) (Base.gate t.flow ~enable)
+
   module FlowStatus = struct
     type t =
       { valid : Signal.t
@@ -516,8 +519,8 @@ module With_header (Data : Interface.S) = struct
     let hdr_enabled_next = Always.Variable.wire ~default:gnd in
     let flow_enabled_next = Always.Variable.wire ~default:gnd in
 
-    let hdr_out = Header.bufferized_gate spec flow.hdr ~enable:hdr_enabled_next.value in
-    let flow_out = Base.bufferized_gate spec flow.flow ~enable:flow_enabled_next.value in
+    let hdr_out = Header.bufferized_gate spec flow.hdr ~enable_in:hdr_enabled_next.value in
+    let flow_out = Base.bufferized_gate spec flow.flow ~enable_in:flow_enabled_next.value in
 
     let last = Always.Variable.wire ~default:gnd in
 
@@ -580,9 +583,76 @@ module With_header (Data : Interface.S) = struct
     ]
 
     ]);
-
     
     {hdr = hdr_out; flow = flow_out}, {FlowStatus.valid = Base.valid flow_out |: Header.valid hdr_out; last_fired = last.value}
+
+  module HeaderBarrierStatus = struct
+    type t =
+      { hdr_valid : Signal.t
+      ; flow_end : Signal.t
+      }
+  end
+
+  let header_barrier spec flow =
+    let open Signal in
+
+    let hdr_enabled_next = Always.Variable.wire ~default:gnd in
+    let hdr_out = Header.bufferized_gate spec flow.hdr ~enable_in:hdr_enabled_next.value in
+
+    let flow_enabled_next = Always.Variable.wire ~default:gnd in
+    let flow_out = Base.bufferized_gate spec ~enable_out:flow_enabled_next.value flow.flow in
+
+    let last = Always.Variable.wire ~default:gnd in
+
+    let module SM = struct
+      type t = Idle | Busy | Wait
+      [@@deriving sexp_of, compare, enumerate]
+    end in
+
+    let sm = Always.State_machine.create (module SM) ~enable:vdd spec in
+
+    Always.(compile [
+    sm.switch [
+      Idle, [
+        hdr_enabled_next <--. 1;
+        when_ (Header.is_fired flow.hdr) [
+          hdr_enabled_next <--. 0;
+          flow_enabled_next <--. 1;
+
+          sm.set_next Busy;
+        ]
+      ];
+
+      Busy, [
+        flow_enabled_next <--. 1;
+        when_ (Base.is_fired_last flow_out) [
+          flow_enabled_next <--. 0;
+
+          if_ (Header.is_fired hdr_out |: ~:(Header.valid hdr_out)) [
+            last <--. 1;
+            sm.set_next Idle;
+          ] [
+            sm.set_next Wait;
+          ];
+        ]
+      ];
+
+      Wait, [
+        when_ (Header.is_fired hdr_out) [
+          last <--. 1;
+          sm.set_next Idle;
+        ];
+      ];
+    ]
+    ]);
+
+    let status = 
+      { HeaderBarrierStatus.hdr_valid = Header.valid hdr_out
+      ; flow_end = last.value
+      }
+    in
+
+    create hdr_out flow_out, status
 
   let from_flow spec (flow : Base.t) =
     let module Serializer = Serializer(Data) in
@@ -621,16 +691,51 @@ module With_header (Data : Interface.S) = struct
   let dispatch spec source ~selector = 
     let open Signal in
 
-    let synchronized, _status = barrier spec source in
-    let sel_onehot = selector (Header.data synchronized.hdr) in
+    let synchronized, status = barrier spec source in
+    let selector_onehot = selector (Header.data synchronized.hdr) in
 
-    let n = width sel_onehot in
+    let source_src, source_dst = if_of_t synchronized in
 
-    let sinks = List.init n ~f:(fun _i ->
-      let sink = create_wires () in
+    let n = width selector_onehot in
 
-      sink
-    ) in
+    let busy = Always.Variable.reg ~width:1 spec in
+    let sel_reg_onehot = Always.Variable.reg ~width:n spec in
+    let sel_onehot = Always.Variable.wire ~default:(zero n) in
+    let drop = ~:(reduce (bits_lsb sel_onehot.value) ~f:( |: )) in
 
+    Always.(compile [
+      if_ busy.value [
+        sel_onehot <-- sel_reg_onehot.value;
+        when_ status.last_fired [
+          busy <--. 0;
+        ]
+      ] [
+        when_ status.valid [
+          sel_onehot <-- selector_onehot;
+          sel_reg_onehot <-- selector_onehot;
+          busy <--. 1;
+        ]
+      ]
+    ]);
+
+    let sink_srcs, sink_dsts = List.init n ~f:(fun _ -> if_of_t (create_wires ())) |> List.unzip in
+    
+    List.iter sink_srcs ~f:(fun src -> Src.Of_signal.assign src source_src);
+
+    let dsts =
+      List.map sink_dsts ~f:Dst.Of_signal.pack |>
+      List.reduce_exn ~f:( |: ) |>
+      Dst.Of_signal.unpack
+    in
+
+    Dst.Of_signal.assign source_dst (Dst.Of_signal.mux2 drop (Dst.map Dst.port_widths ~f:ones) dsts);
+
+    let sinks = 
+      List.map2_exn sink_srcs sink_dsts ~f:t_of_if |>
+      List.mapi ~f:(fun i sink -> gate ~enable:(bit sel_onehot.value i) sink)
+    in
+
+    (* TODO: perhaps bufferize sinks? *)
     sinks
+
 end

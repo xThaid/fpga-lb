@@ -1,0 +1,102 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Wed Jan 19 22:57:50 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/flow_with_hdr_dispatcher.gtkw"
+[timestart] 0
+[size] 1920 1023
+[pos] -36 -36
+*-4.000000 25 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 247
+[signals_width] 324
+[sst_expanded] 1
+[sst_vpaned_height] 291
+@28
+inputs.clock
+@200
+-
+@22
+inputs.source_flow_data[31:0]
+@28
+inputs.source_flow_empty[1:0]
+inputs.source_flow_last
+inputs.source_flow_valid
+@22
+inputs.source_hdr_field1[47:0]
+inputs.source_hdr_field2[7:0]
+inputs.source_hdr_field3[15:0]
+@28
+inputs.source_hdr_valid
+outputs.source_flow_ready
+outputs.source_hdr_ready
+@200
+-
+@22
+[color] 2
+outputs.sink1_flow_data[31:0]
+@28
+[color] 2
+outputs.sink1_flow_empty[1:0]
+[color] 2
+outputs.sink1_flow_last
+[color] 2
+outputs.sink1_flow_valid
+@22
+[color] 2
+outputs.sink1_hdr_field1[47:0]
+[color] 2
+outputs.sink1_hdr_field2[7:0]
+[color] 2
+outputs.sink1_hdr_field3[15:0]
+@28
+[color] 2
+outputs.sink1_hdr_valid
+[color] 2
+inputs.sink1_flow_ready
+[color] 2
+inputs.sink1_hdr_ready
+@200
+-
+@22
+outputs.sink2_flow_data[31:0]
+@28
+outputs.sink2_flow_empty[1:0]
+outputs.sink2_flow_last
+outputs.sink2_flow_valid
+@22
+outputs.sink2_hdr_field1[47:0]
+outputs.sink2_hdr_field2[7:0]
+outputs.sink2_hdr_field3[15:0]
+@28
+outputs.sink2_hdr_valid
+inputs.sink2_flow_ready
+inputs.sink2_hdr_ready
+@200
+-
+@22
+[color] 1
+outputs.sink3_flow_data[31:0]
+@28
+[color] 1
+outputs.sink3_flow_empty[1:0]
+[color] 1
+outputs.sink3_flow_last
+[color] 1
+outputs.sink3_flow_valid
+@22
+[color] 1
+outputs.sink3_hdr_field1[47:0]
+[color] 1
+outputs.sink3_hdr_field2[7:0]
+[color] 1
+outputs.sink3_hdr_field3[15:0]
+@28
+[color] 1
+outputs.sink3_hdr_valid
+[color] 1
+inputs.sink3_flow_ready
+[color] 1
+inputs.sink3_hdr_ready
+[pattern_trace] 1
+[pattern_trace] 0

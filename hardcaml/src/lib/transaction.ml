@@ -99,11 +99,12 @@ module Make (Data : Interface.S) = struct
   
     tst_out
 
-  let bufferized_gate spec t ~enable = 
+  let bufferized_gate spec ?(enable_in=Signal.vdd) ?(enable_out=Signal.vdd) t= 
     let open Signal in
-    let tst = create ~valid:(t.s.valid &: (reg spec enable)) ~data:t.s.data in
-    t.d.ready <== reg spec (tst.d.ready &: enable);
-    bufferize spec ~ready_ahead:true tst
+    let tst = create ~valid:(t.s.valid &: (reg spec enable_in)) ~data:t.s.data in
+    t.d.ready <== reg spec (tst.d.ready &: enable_in);
+    let tst = bufferize spec ~ready_ahead:true tst in
+    gate tst ~enable:(reg spec enable_out)
 
   let pipe_source spec tst_in = 
     let open Signal in

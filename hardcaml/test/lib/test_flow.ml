@@ -973,3 +973,159 @@ let%expect_test "flow_with_hdr_arbitrate" =
     30313233 34353637 38393a3b
 
     60616263 64656667 68696a6b 6c6d|}]
+
+
+module FlowWithHeaderDispatcherSim = struct
+  module With_header = Flow.With_header(TestData)
+  module Header = Transaction.Make(TestData)
+
+  module I = struct
+    type 'a t =
+        { clock : 'a
+        ; reset : 'a
+        ; sink1 : 'a With_header.Dst.t [@rtlprefix "sink1_"]
+        ; sink2 : 'a With_header.Dst.t [@rtlprefix "sink2_"]
+        ; sink3 : 'a With_header.Dst.t [@rtlprefix "sink3_"]
+        ; source : 'a With_header.Src.t [@rtlprefix "source_"]
+        }
+    [@@deriving sexp_of, hardcaml]
+  end
+  
+  module O = struct
+    type 'a t =
+      { sink1 : 'a With_header.Src.t [@rtlprefix "sink1_"]
+      ; sink2 : 'a With_header.Src.t [@rtlprefix "sink2_"]
+      ; sink3 : 'a With_header.Src.t [@rtlprefix "sink3_"]
+      ; source : 'a With_header.Dst.t [@rtlprefix "source_"]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
+    let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
+
+    let sink1 = With_header.t_of_if (With_header.Src.Of_signal.wires ()) i.sink1 in
+    let sink2 = With_header.t_of_if (With_header.Src.Of_signal.wires ()) i.sink2 in
+    let sink3 = With_header.t_of_if (With_header.Src.Of_signal.wires ()) i.sink3 in
+    let source = With_header.t_of_if i.source (With_header.Dst.Of_signal.wires ()) in
+
+    let sinks = With_header.dispatch spec source ~selector:(fun data ->
+      let open Signal in
+      let s1 = data.field1 <=:. 256 in
+      let s2 = (data.field1 >:. 256) &: (data.field2 ==:. 16) in 
+      let s3 = (data.field1 >:. 256) &: (data.field3 ==:. 8) in
+
+      concat_msb [s3; s2; s1]
+    ) in
+
+    With_header.connect sink1 (List.nth_exn sinks 0);
+    With_header.connect sink2 (List.nth_exn sinks 1);
+    With_header.connect sink3 (List.nth_exn sinks 2);
+
+    { O.sink1 = fst (With_header.if_of_t sink1)
+    ; sink2 = fst (With_header.if_of_t sink2)
+    ; sink3 = fst (With_header.if_of_t sink3)
+    ; source = snd (With_header.if_of_t source)
+    }
+
+end
+    
+let%expect_test "flow_with_hdr_dispatcher" =
+  let module Sim = Sim.Sim(FlowWithHeaderDispatcherSim) in
+  let module Emitter = FlowWithHeaderEmitter(TestData) in
+  let module Consumer = FlowWithHeaderConsumer(TestData) in
+  
+  let sim = Sim.create ~name:"flow_with_hdr_dispatcher" ~gtkwave:false () ~trace:false in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let sink1 = Consumer.create outputs.sink1 inputs.sink1 in
+  let sink2 = Consumer.create outputs.sink2 inputs.sink2 in
+  let sink3 = Consumer.create outputs.sink3 inputs.sink3 in
+  let source = Emitter.create inputs.source outputs.source in
+
+  Sim.add_element sim (module Consumer) sink1;
+  Sim.add_element sim (module Consumer) sink2;
+  Sim.add_element sim (module Consumer) sink3;
+  Sim.add_element sim (module Emitter) source;
+
+  let create_data data = TestData.t_of_sexp String.t_of_sexp (Parsexp.Single.parse_string_exn data) in
+
+  Emitter.add_transfer source (create_data "((field1 000000000000) (field2 12) (field3 3123))") (FlowEmitter.gen_seq_transfer ~from:0 16);
+  Emitter.add_transfer source (create_data "((field1 111111111111) (field2 10) (field3 1111))") (FlowEmitter.gen_seq_transfer ~from:16 15);
+  Emitter.add_transfer source (create_data "((field1 777777777777) (field2 77) (field3 7777))") (FlowEmitter.gen_seq_transfer ~from:112 16);
+  Emitter.add_transfer source (create_data "((field1 000000000000) (field2 10) (field3 8888))") (FlowEmitter.gen_seq_transfer ~from:128 15);
+  Emitter.add_transfer source (create_data "((field1 111111111111) (field2 10) (field3 1111))") (FlowEmitter.gen_seq_transfer ~from:32 12);
+  Emitter.add_transfer source (create_data "((field1 111111111111) (field2 11) (field3 0008))") (FlowEmitter.gen_seq_transfer ~from:48 13);
+  Emitter.add_transfer source (create_data "((field1 000000000000) (field2 11) (field3 0008))") (FlowEmitter.gen_seq_transfer ~from:64 14);
+  Emitter.add_transfer source (create_data "((field1 000000000000) (field2 55) (field3 5555))") (FlowEmitter.gen_seq_transfer ~from:80 15);
+  Emitter.add_transfer source (create_data "((field1 000000000000) (field2 66) (field3 6666))") (FlowEmitter.gen_seq_transfer ~from:96 20);
+
+  Sim.cycle_n sim 1;
+
+  source.enabled <- true;
+  sink1.enabled <- true;
+  sink2.enabled <- true;
+  sink3.enabled <- true;
+
+  Sim.cycle_n sim 6;
+  sink1.enabled <- false;
+  Sim.cycle_n sim 3;
+  sink1.enabled <- true;
+  Sim.cycle_n sim 4;
+
+  source.enabled <- false;
+  Sim.cycle_n sim 5;
+  source.enabled <- true;
+  Sim.cycle_n sim 2;
+  source.enabled <- false;
+
+  Sim.cycle_n sim 6;
+  sink2.enabled <- false;
+  Sim.cycle_n sim 3;
+  sink2.enabled <- true;
+  Sim.cycle_n sim 4;
+
+  Sim.cycle_n sim 4;
+  sink3.enabled <- false;
+  Sim.cycle_n sim 3;
+  sink3.enabled <- true;
+  Sim.cycle_n sim 6;
+  
+  Sim.cycle_n sim 5;
+  source.enabled <- true;
+
+  Sim.cycle_n sim 50;
+  
+  Consumer.expect_transfers sink1;
+  Consumer.expect_transfers sink2;
+  Consumer.expect_transfers sink3;
+
+  [%expect {|
+    (consumed
+     (((field1 000000000000) (field2 12) (field3 3123))
+      ((field1 000000000000) (field2 10) (field3 8888))
+      ((field1 000000000000) (field2 11) (field3 0008))
+      ((field1 000000000000) (field2 55) (field3 5555))
+      ((field1 000000000000) (field2 66) (field3 6666))))
+    00010203 04050607 08090a0b 0c0d0e0f
+
+    80818283 84858687 88898a8b 8c8d8e
+
+    40414243 44454647 48494a4b 4c4d
+
+    50515253 54555657 58595a5b 5c5d5e
+
+    60616263 64656667 68696a6b 6c6d6e6f
+    70717273
+
+    (consumed
+     (((field1 111111111111) (field2 10) (field3 1111))
+      ((field1 111111111111) (field2 10) (field3 1111))))
+    10111213 14151617 18191a1b 1c1d1e
+
+    20212223 24252627 28292a2b
+
+    (consumed (((field1 111111111111) (field2 11) (field3 0008))))
+    30313233 34353637 38393a3b 3c|}]
