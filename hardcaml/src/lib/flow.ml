@@ -462,7 +462,7 @@ module With_header (Data : Interface.S) = struct
 
   module Src = struct
     type 'a t =
-      { tst : 'a Header.Src.t
+      { hdr : 'a Header.Src.t
       ; flow : 'a Base.Src.t
       }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -470,29 +470,29 @@ module With_header (Data : Interface.S) = struct
 
   module Dst = struct
     type 'a t =
-      { tst : 'a Header.Dst.t
+      { hdr : 'a Header.Dst.t
       ; flow : 'a Base.Dst.t
       }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
 
   type t = 
-    { tst : Header.t
+    { hdr : Header.t
     ; flow : Base.t
     }
 
   let t_of_if (src : Signal.t Src.t) (dst : Signal.t Dst.t)= 
-    let tst = Header.t_of_if src.tst dst.tst in
+    let hdr = Header.t_of_if src.hdr dst.hdr in
     let flow = Base.t_of_if src.flow dst.flow in
-    {tst; flow}
+    {hdr; flow}
   let if_of_t (t : t) =
-    let tst_s, tst_d = Header.if_of_t t.tst in
+    let hdr_s, hdr_d = Header.if_of_t t.hdr in
     let flow_src, flow_dst = Base.if_of_t t.flow in
-    {Src.tst = tst_s; flow = flow_src}, {Dst.tst = tst_d; flow = flow_dst}
+    {Src.hdr = hdr_s; flow = flow_src}, {Dst.hdr = hdr_d; flow = flow_dst}
   let create_wires () = 
     t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
-  let create hdr flow = {tst = hdr; flow}
+  let create hdr flow = {hdr = hdr; flow}
 
   let connect t1 t2 =
     let i1, o1 = if_of_t t1 in
@@ -501,7 +501,7 @@ module With_header (Data : Interface.S) = struct
     Dst.Of_signal.assign o2 o1
 
   let bufferize spec t = 
-    create (Header.bufferize spec t.tst) (Base.bufferize spec t.flow)
+    create (Header.bufferize spec t.hdr) (Base.bufferize spec t.flow)
 
   module FlowStatus = struct
     type t =
@@ -510,13 +510,13 @@ module With_header (Data : Interface.S) = struct
       }
   end
 
-  let synchronize_with_status spec (flow : t) =
+  let barrier spec (flow : t) =
     let open Signal in
 
     let hdr_enabled_next = Always.Variable.wire ~default:gnd in
     let flow_enabled_next = Always.Variable.wire ~default:gnd in
 
-    let hdr_out = Header.bufferized_gate spec flow.tst ~enable:hdr_enabled_next.value in
+    let hdr_out = Header.bufferized_gate spec flow.hdr ~enable:hdr_enabled_next.value in
     let flow_out = Base.bufferized_gate spec flow.flow ~enable:flow_enabled_next.value in
 
     let last = Always.Variable.wire ~default:gnd in
@@ -538,7 +538,7 @@ module With_header (Data : Interface.S) = struct
     sm_hdr.switch [
       HdrIdle, [
         hdr_enabled_next <--. 1;
-        when_ (Header.is_fired flow.tst) [
+        when_ (Header.is_fired flow.hdr) [
           hdr_enabled_next <--. 0;
           sm_hdr.set_next HdrWait;
         ]
@@ -582,26 +582,23 @@ module With_header (Data : Interface.S) = struct
     ]);
 
     
-    {tst = hdr_out; flow = flow_out}, {FlowStatus.valid = Base.valid flow_out |: Header.valid hdr_out; last_fired = last.value}
-
-  let synchronize spec (flow : t) =
-    fst (synchronize_with_status spec flow)
+    {hdr = hdr_out; flow = flow_out}, {FlowStatus.valid = Base.valid flow_out |: Header.valid hdr_out; last_fired = last.value}
 
   let from_flow spec (flow : Base.t) =
     let module Serializer = Serializer(Data) in
     let f1, f2 = Base.split spec ~hdr_length:Header.data_len ~source:flow in
-    let tst = Serializer.deserialize spec f1 in
-    synchronize spec (create tst f2)
+    let hdr = Serializer.deserialize spec f1 in
+    fst (barrier spec (create hdr f2))
 
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
-    let f1 = Serializer.serialize spec flow.tst in
+    let f1 = Serializer.serialize spec flow.hdr in
     Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow
 
   let arbitrate spec sources =
     let open Signal in
 
-    let synchronized = List.map sources ~f:(synchronize_with_status spec) in
+    let synchronized = List.map sources ~f:(barrier spec) in
     let request, acknowledge = List.map synchronized ~f:(fun (_, s) -> s.valid, s.last_fired) |> List.unzip in
 
     let granted_onehot = Arbiter.round_robin spec ~request ~acknowledge in
@@ -621,4 +618,19 @@ module With_header (Data : Interface.S) = struct
 
     bufferize spec (t_of_if src dst)
 
+  let dispatch spec source ~selector = 
+    let open Signal in
+
+    let synchronized, _status = barrier spec source in
+    let sel_onehot = selector (Header.data synchronized.hdr) in
+
+    let n = width sel_onehot in
+
+    let sinks = List.init n ~f:(fun _i ->
+      let sink = create_wires () in
+
+      sink
+    ) in
+
+    sinks
 end

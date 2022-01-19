@@ -279,7 +279,7 @@ end
 let datapath spec ~(rx : Eth_flow.t) (table_write_port : Signal.t Table.WritePort.t) = 
   let module Serializer = Flow.Serializer(Common.ArpPacket) in
 
-  let tst_in = EthArpTst.join_comb rx.tst (Serializer.deserialize spec rx.flow) in
+  let tst_in = EthArpTst.join_comb rx.hdr (Serializer.deserialize spec rx.flow) in
 
   let arp_in_req, arp_in_resp = 
     EthArpTst.demux2_on tst_in ~f:(fun pkt -> Signal.(pkt.snd.oper ==:. 1))

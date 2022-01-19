@@ -321,7 +321,7 @@ module FlowWithHeaderEmitter (Data : Interface.S) = struct
 
   let create (src : Bits.t ref Flow.Src.t) (dst : Bits.t ref Flow.Dst.t) = 
     { enabled = false
-    ; tst_emit = TstEmitter.create src.tst dst.tst
+    ; tst_emit = TstEmitter.create src.hdr dst.hdr
     ; flow_emit = FlowEmitter.create src.flow dst.flow
     }
 
@@ -356,7 +356,7 @@ module FlowWithHeaderConsumer (Data : Interface.S) = struct
   let create (src : Bits.t ref Flow.Src.t) (dst : Bits.t ref Flow.Dst.t) = 
     { enabled = false
     ; transfers = Linked_queue.create ()
-    ; tst_cons = TstConsumer.create src.tst dst.tst
+    ; tst_cons = TstConsumer.create src.hdr dst.hdr
     ; flow_cons = FlowConsumer.create src.flow dst.flow
     }
 
