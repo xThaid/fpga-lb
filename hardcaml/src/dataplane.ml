@@ -26,16 +26,31 @@ let create
       spec
       ~(rx : Flow.Base.t)
       ~(tx : Flow.Base.t) =
+  let rx_eth = Eth_flow.from_flow spec rx in
 
-  let rx_eth_flow = Eth_flow.from_flow spec rx in
+  let eth_flows = Eth_flow.dispatch spec rx_eth ~selector:(fun eth -> 
+    let open Signal in
+    let sel_arp = eth.ether_type ==:. 0x0806 in
+    let sel_ip = eth.ether_type ==:. 0x0800 in
 
-  let arp_query_port = Arp.Table.ReadPort.create_wires () in
-  Arp.Table.ReadPort.I.iter2 arp_query_port.i Arp.Table.ReadPort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
+    concat_msb [sel_ip; sel_arp]
+  ) in
+  let rx_eth_arp = List.nth eth_flows 0 in
+  let rx_eth_ip = List.nth eth_flows 1 in
 
-  let arp_tx = Eth_flow.create_wires () in
-  Arp.hierarchical scope spec ~rx:rx_eth_flow ~tx:arp_tx ~query:arp_query_port;
+  let arp_tx_eth, arp_query_port = Arp.hierarchical scope spec ~rx:rx_eth_arp in
 
-  Flow.Base.connect tx (Eth_flow.to_flow spec arp_tx)
+  let lb_ip_tx = IPv4_flow.create_wires () in
+  let lb_ip_tx_i, _ = IPv4_flow.if_of_t lb_ip_tx in
+  IPv4_flow.Src.iter2 lb_ip_tx_i IPv4_flow.Src.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
+
+  let ip_tx_eth, ip_tx_ip = Ip.hierarchical scope spec ~eth_rx:rx_eth_ip ~ip_rx:lb_ip_tx ~arp_query:arp_query_port in
+
+  IPv4_flow.drop ip_tx_ip;
+
+  let tx_eth = Eth_flow.arbitrate spec [arp_tx_eth; ip_tx_eth] in
+
+  Flow.Base.connect tx (Eth_flow.to_flow spec tx_eth)
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in

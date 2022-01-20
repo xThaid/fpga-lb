@@ -57,6 +57,59 @@ module FlowEmitter = struct
 
 end
 
+module AvalonFlowEmitter = struct
+  type t =
+    { mutable enabled : bool
+    ; mutable buff : bytes
+    ; mutable buff_pos : int
+    ; transfers : bytes Linked_queue.t
+    ; i : Bits.t ref Flow.AvalonST.I.t
+    ; o : Bits.t ref Flow.AvalonST.O.t
+    }
+
+  let transfer_done t =
+    t.buff_pos >= Bytes.length t.buff
+
+  let comb t = 
+    let get_nth_byte n = 
+      if n >= Bytes.length t.buff then
+        Bits.ones 8
+      else
+        Bytes.get t.buff n |> Bits.of_char
+    in
+
+    if transfer_done t then (
+      match Linked_queue.dequeue t.transfers with
+      | None -> ()
+      | Some b -> t.buff_pos <- 0; t.buff <- b
+    );
+    
+    let buf_len = Bytes.length t.buff in
+
+    t.i.data := List.init 4 ~f:(fun i -> get_nth_byte (t.buff_pos + i)) |> Bits.concat_msb;
+    t.i.valid := Bits.of_bool (not (transfer_done t) && t.enabled);
+    t.i.empty := Bits.of_int ~width:2 (max 0 (4 + t.buff_pos - buf_len));
+    t.i.endofpacket := Bits.of_bool (4 + t.buff_pos >= buf_len);
+    t.i.startofpacket := Bits.of_bool (t.buff_pos = 0)
+
+  let seq t =
+    if (Bits.is_vdd !(t.o.ready) && not (transfer_done t) && t.enabled) then
+      t.buff_pos <- t.buff_pos + 4
+
+  let create (i : Bits.t ref Flow.AvalonST.I.t) (o : Bits.t ref Flow.AvalonST.O.t) =
+    { enabled = false
+    ; buff = Bytes.create 0
+    ; buff_pos = 0
+    ; transfers = Linked_queue.create ()
+    ; i
+    ; o
+    }
+
+  let add_transfer t b =
+    Linked_queue.enqueue t.transfers b
+
+end
+
 module FlowConsumer = struct
   type t =
   { mutable enabled : bool
@@ -111,6 +164,63 @@ module FlowConsumer = struct
     in
 
     List.rev !(t.transfers) |> List.iter ~f:print_transfer
+
+end
+
+module AvalonFlowConsumer = struct
+  type t =
+  { mutable enabled : bool
+  ; i : Bits.t ref Flow.AvalonST.I.t
+  ; o : Bits.t ref Flow.AvalonST.O.t
+  ; buff : Buffer.t
+  ; mutable transfers : bytes list
+  }
+
+  let comb t = 
+    t.o.ready := Bits.of_bool t.enabled
+
+  let seq t =
+    if Bits.is_vdd !(t.i.valid) && Bits.is_vdd !(t.o.ready) then (
+      
+      let valid_cnt = 4 - Bits.to_int !(t.i.empty) in
+      let bytes_to_add = Bits.split_msb ~part_width:8 !(t.i.data) |>
+       List.map ~f:(fun x -> Bits.to_char x) |>
+       List.filteri ~f:(fun i _-> i < valid_cnt) |>
+       Bytes.of_char_list
+      in
+      
+      Buffer.add_bytes t.buff bytes_to_add;
+
+      if Bits.is_vdd !(t.i.endofpacket) then (
+        t.transfers <- (Buffer.contents_bytes t.buff) :: t.transfers;
+        Buffer.clear t.buff
+      )
+    )
+
+  let create (i : Bits.t ref Flow.AvalonST.I.t) (o : Bits.t ref Flow.AvalonST.O.t) =
+    {enabled = false;
+     i;
+     o;
+     buff = Buffer.create 32;
+     transfers = []
+    }
+
+   let reset t =
+    Buffer.clear t.buff;
+    t.transfers <- []
+
+  let expect_data t =
+    let print_transfer b =
+      let octets = Bytes.to_list b |> List.map ~f:(fun c -> Printf.sprintf "%02x" (Char.to_int c)) in
+      let words = List.chunks_of ~length:4 octets |> List.map ~f:String.concat in
+      let lines = List.chunks_of ~length:4 words |> List.map ~f:(String.concat ~sep:" ") in
+      
+      let hexdump = String.concat ~sep:"\n" lines in
+      
+      Stdio.print_endline (hexdump ^ "\n");
+    in
+
+    List.rev t.transfers |> List.iter ~f:print_transfer
 
 end
 

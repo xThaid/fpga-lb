@@ -33,6 +33,11 @@ module Make (Data : Interface.S) = struct
   let create_wires () = t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
   let create ~valid ~data = t_of_if {Src.valid; data} (Dst.Of_signal.wires ())
 
+  let apply_names ?prefix ?suffix t =
+    let src = Src.Of_signal.apply_names ?prefix ?suffix t.s in
+    let dst = Dst.Of_signal.apply_names ?prefix ?suffix t.d in
+    t_of_if src dst
+
   let connect t1 t2 =
     Src.Of_signal.assign t1.s t2.s;
     Dst.Of_signal.assign t2.d t1.d
@@ -57,6 +62,10 @@ module Make (Data : Interface.S) = struct
     let tst = create ~valid:(t.s.valid &: enable) ~data:t.s.data in
     t.d.ready <== (tst.d.ready &: enable);
     tst
+  
+  let drop t =
+    let open Signal in
+    t.d.ready <== vdd
 
   let demux n sel tst = 
     let open Signal in

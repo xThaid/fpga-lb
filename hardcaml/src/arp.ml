@@ -26,13 +26,13 @@ module Table = struct
       [@@deriving sexp_of, hardcaml]
     end 
   
-    type 'a t = 
-      { i : 'a I.t
-      ; o : 'a O.t
+    type t = 
+      { i : Signal.t I.t
+      ; o : Signal.t O.t
       }
   
     let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
-    let if_of_t (t : Signal.t t) = t.i, t.o
+    let if_of_t (t : t) = t.i, t.o
 
     let create_wires () = t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
   end
@@ -47,12 +47,12 @@ module Table = struct
       [@@deriving sexp_of, hardcaml]
     end
   
-    type 'a t =
-      { i : 'a I.t
+    type t =
+      { i : Signal.t I.t
       }
   
     let t_of_if (i : Signal.t I.t) = {i}
-    let if_of_t (t : Signal.t t) = t.i
+    let if_of_t (t : t) = t.i
     let create_wires () = t_of_if (I.Of_signal.wires ())
   end
   
@@ -189,8 +189,8 @@ module Table = struct
         ~capacity
         (scope : Scope.t)
         spec
-        ~(query_port : Signal.t ReadPort.t)
-        ~(write_port : Signal.t WritePort.t) =
+        ~(query_port : ReadPort.t)
+        ~(write_port : WritePort.t) =
     let module H = Hierarchy.In_scope(I)(O) in
   
     let clock = Reg_spec.clock spec in
@@ -276,7 +276,7 @@ module O = struct
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
 
-let datapath spec ~(rx : Eth_flow.t) (table_write_port : Signal.t Table.WritePort.t) = 
+let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) = 
   let module Serializer = Flow.Serializer(Common.ArpPacket) in
 
   let tst_in = EthArpTst.join_comb rx.hdr (Serializer.deserialize spec rx.flow) in
@@ -327,7 +327,7 @@ let create
       spec
       ~(rx : Eth_flow.t)
       ~(tx : Eth_flow.t)
-      ~(query : Signal.t Table.ReadPort.t) =
+      ~(query : Table.ReadPort.t) =
   
   let table_write_port = Table.WritePort.create_wires () in
   
@@ -347,13 +347,14 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
 let hierarchical
       (scope : Scope.t)
       spec
-      ~(rx : Eth_flow.t)
-      ~(tx : Eth_flow.t)
-      ~(query : Signal.t Table.ReadPort.t) =
+      ~(rx : Eth_flow.t) =
   let module H = Hierarchy.In_scope(I)(O) in
 
   let clock = Reg_spec.clock spec in
   let clear = Reg_spec.clear spec in
+
+  let tx = Eth_flow.create_wires () in
+  let query = Table.ReadPort.create_wires () in
 
   let rx_i, rx_o = Eth_flow.if_of_t rx in
   let tx_i, tx_o = Eth_flow.if_of_t tx in
@@ -368,3 +369,5 @@ let hierarchical
 
   let o2 = H.hierarchical ~scope ~name:"arp" create_fn i in
   O.Of_signal.assign o o2;
+
+  tx, query

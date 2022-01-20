@@ -267,6 +267,76 @@ let%expect_test "transaction_deserializer" =
       ((field1 808182838485) (field2 86) (field3 8788))))
     898e55e1d82bf24b7a30f8a33080f83a|}]
 
+let%expect_test "transaction_deserializer_aligned" =
+  let module DeserializerSim = DeserializerSim(TestDataAligned) in
+  let module Sim = Sim.Sim(DeserializerSim) in
+  let module Consumer = TransactionConsumer(TestDataAligned) in
+  
+  let sim = Sim.create ~name:"transaction_deserializer_aligned" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
+  let consumer = Consumer.create outputs.tst inputs.tst in
+
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module Consumer) consumer;
+
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:0 22);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:32 12);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:48 12);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:64 12);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:80 12);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:96 24);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:112 12);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:128 15);
+
+  emitter.enabled <- true;
+  consumer.enabled <- true;
+
+  Sim.cycle_n sim 4;
+
+  emitter.enabled <- false;
+  Sim.cycle_n sim 2;
+  emitter.enabled <- true;
+  Sim.cycle_n sim 5;
+  emitter.enabled <- false;
+  Sim.cycle_n sim 1;
+  emitter.enabled <- true;
+  Sim.cycle_n sim 2;
+  consumer.enabled <- false;
+  Sim.cycle_n sim 1;
+  emitter.enabled <- false;
+  Sim.cycle_n sim 2;
+  consumer.enabled <- true;
+  Sim.cycle_n sim 3;
+  emitter.enabled <- true;
+  Sim.cycle_n sim 4;
+  consumer.enabled <- false;
+  Sim.cycle_n sim 3;
+  consumer.enabled <- true;
+  Sim.cycle_n sim 6;
+  consumer.enabled <- false;
+  Sim.cycle_n sim 7;
+  consumer.enabled <- true;
+
+  Sim.cycle_n sim 15;
+
+  Consumer.expect_reads consumer;
+  Sim.expect_trace_digest sim;
+
+  [%expect {|
+    (consumed
+     (((field1 000102030405) (field2 06) (field3 0708) (field4 090a0b))
+      ((field1 202122232425) (field2 26) (field3 2728) (field4 292a2b))
+      ((field1 303132333435) (field2 36) (field3 3738) (field4 393a3b))
+      ((field1 404142434445) (field2 46) (field3 4748) (field4 494a4b))
+      ((field1 505152535455) (field2 56) (field3 5758) (field4 595a5b))
+      ((field1 606162636465) (field2 66) (field3 6768) (field4 696a6b))
+      ((field1 707172737475) (field2 76) (field3 7778) (field4 797a7b))
+      ((field1 808182838485) (field2 86) (field3 8788) (field4 898a8b))))
+    2e8e4dd57c90dc09289f4a41cd50d3f3|}]
 
 module WithHeaderSim (Data : Interface.S) = struct
   module With_flow = Flow.With_header(Data)

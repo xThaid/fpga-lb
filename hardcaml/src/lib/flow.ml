@@ -494,6 +494,12 @@ module With_header (Data : Interface.S) = struct
 
   let create hdr flow = {hdr = hdr; flow}
 
+  let apply_names ?prefix ?suffix t =
+    let src, dst = if_of_t t in
+    let src = Src.Of_signal.apply_names ?prefix ?suffix src in
+    let dst = Dst.Of_signal.apply_names ?prefix ?suffix dst in
+    t_of_if src dst
+
   let connect t1 t2 =
     let i1, o1 = if_of_t t1 in
     let i2, o2 = if_of_t t2 in
@@ -505,6 +511,13 @@ module With_header (Data : Interface.S) = struct
 
   let gate t ~enable = 
     create (Header.gate t.hdr ~enable) (Base.gate t.flow ~enable)
+
+  let drop t =
+    Header.drop t.hdr;
+    Base.drop t.flow
+
+  let map_hdr t ~f =
+    create (Header.map_comb t.hdr ~f) t.flow
 
   module FlowStatus = struct
     type t =
