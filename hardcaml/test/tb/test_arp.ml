@@ -1,6 +1,7 @@
 open Base
 open Hardcaml
 open Lb_dataplane
+open Lb_dataplane_test_lib
 open Sim_elements
 
 module ArpTableSim = struct

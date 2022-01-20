@@ -47,7 +47,7 @@ module Sim (S : S) = struct
     in
 
     let sim = if gtkwave then
-       Vcd.Gtkwave.gtkwave ~args:("--save=../../../test/res/" ^ gtkwave_name ^ ".gtkw") sim
+       Vcd.Gtkwave.gtkwave ~args:("--save=../../../../test/res/" ^ gtkwave_name ^ ".gtkw") sim
     else
       sim
     in

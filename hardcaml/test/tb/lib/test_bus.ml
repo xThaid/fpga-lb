@@ -1,6 +1,7 @@
 open !Base
 open Hardcaml
 open Lb_dataplane
+open Lb_dataplane_test_lib
 
 module InterconnectSim = struct
   module BusHost = Bus.Agent.Make (struct let addr_len = 4 end)
