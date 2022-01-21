@@ -22,23 +22,23 @@ let%expect_test "arp_table" =
   let _outputs = Sim.outputs sim in
 
   let write_cache ip mac = 
-    inputs.write.ip := Bits.of_hex ~width:32 ip;
-    inputs.write.mac := Bits.of_hex ~width:48 mac;
+    inputs.write.data.ip := Bits.of_hex ~width:32 ip;
+    inputs.write.data.mac := Bits.of_hex ~width:48 mac;
     inputs.write.valid := Bits.vdd;
     Sim.cycle sim;
     inputs.write.valid := Bits.gnd
   in
 
   let send_query ip = 
-    inputs.query.ip := Bits.of_hex ~width:32 ip;
-    inputs.query.req_valid := Bits.vdd;
+    inputs.query.req.data.ip := Bits.of_hex ~width:32 ip;
+    inputs.query.req.valid := Bits.vdd;
     Sim.cycle sim;
-    inputs.query.req_valid := Bits.gnd;
+    inputs.query.req.valid := Bits.gnd;
   in
 
   Sim.cycle_n sim 2;
 
-  inputs.query.resp_ready := Bits.vdd;
+  inputs.query.resp.ready := Bits.vdd;
 
   write_cache "0001" "0001";
   write_cache "0002" "2000";
@@ -62,26 +62,26 @@ let%expect_test "arp_table" =
   send_query "00ff";
   send_query "0002";
   Sim.cycle_n sim 4;
-  inputs.query.resp_ready := Bits.vdd;
+  inputs.query.resp.ready := Bits.vdd;
   send_query "0001";
-  inputs.query.resp_ready := Bits.gnd;
+  inputs.query.resp.ready := Bits.gnd;
   Sim.cycle_n sim 4;
-  inputs.query.resp_ready := Bits.vdd;
+  inputs.query.resp.ready := Bits.vdd;
   Sim.cycle_n sim 2;
   send_query "0001";
-  inputs.query.resp_ready := Bits.gnd;
+  inputs.query.resp.ready := Bits.gnd;
   Sim.cycle sim;
   send_query "0002";
   send_query "00ff";
   send_query "aaaa";
-  inputs.query.resp_ready := Bits.vdd;
+  inputs.query.resp.ready := Bits.vdd;
   Sim.cycle sim;
 
   Sim.cycle_n sim 10;
 
   Sim.expect_trace_digest sim;
 
-  [%expect {| 66c20b7442bcded75e1a796395d09879 |}]
+  [%expect {| a88b901a590719815500c51ec3d4b3af |}]
 
 
 module BusAdapterSim = struct

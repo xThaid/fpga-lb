@@ -42,7 +42,6 @@ let create
     }
   ) in
 
-  Arp.Table.ReadPort.I.iter2 arp_query.i Arp.Table.ReadPort.I.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
   eth_rx, ip_rx
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =

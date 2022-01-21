@@ -1,13 +1,13 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Mon Jan  3 22:05:11 2022
+[*] Fri Jan 21 12:31:48 2022
 [*]
 [dumpfile] "(null)"
 [savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/arp_table.gtkw"
-[timestart] 61
+[timestart] 47
 [size] 1920 1023
 [pos] -1 -1
-*-4.000000 102 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-4.000000 69 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 247
 [signals_width] 361
 [sst_expanded] 1
@@ -16,20 +16,20 @@
 inputs.clock
 @200
 -
-@22
-inputs.query_ip[31:0]
 @28
 inputs.query_req_valid
 outputs.query_req_ready
+@22
+inputs.query_req_ip[31:0]
 @200
 -
 @28
 inputs.query_resp_ready
 outputs.query_resp_valid
 @22
-outputs.query_mac[47:0]
-@28
-outputs.query_error
+outputs.query_resp_mac[47:0]
+@29
+outputs.query_resp_error
 @200
 -
 @22

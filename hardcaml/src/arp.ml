@@ -7,53 +7,83 @@ module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket)
 
 module Table = struct
   module ReadPort = struct
-    module I = struct
+    module RequestData = struct
       type 'a t =
-        { req_valid : 'a
-        ; ip : 'a [@bits 32]
-        ; resp_ready : 'a
+        { ip : 'a [@bits 32]
         }
       [@@deriving sexp_of, hardcaml]
     end
-    
-    module O = struct
+    module ResponseData = struct
       type 'a t =
-        { req_ready : 'a
-        ; resp_valid : 'a
-        ; mac : 'a [@bits 48]
+        { mac : 'a [@bits 48]
         ; error : 'a
         }
       [@@deriving sexp_of, hardcaml]
-    end 
+    end
+
+    module Request = Transaction.Make(RequestData)
+    module Response = Transaction.Make(ResponseData)
   
+    module I = struct
+      type 'a t =
+        { req : 'a Request.Src.t
+        ; resp : 'a Response.Dst.t
+        }
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+    end
+  
+    module O = struct
+      type 'a t =
+        { req : 'a Request.Dst.t
+        ; resp : 'a Response.Src.t
+        }
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+    end
+
     type t = 
-      { i : Signal.t I.t
-      ; o : Signal.t O.t
+      { req : Request.t
+      ; resp : Response.t
       }
   
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
-    let if_of_t (t : t) = t.i, t.o
+    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
+      let req = Request.t_of_if i.req o.req in
+      let resp = Response.t_of_if o.resp i.resp in
+      {req; resp}
 
-    let create_wires () = t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
+    let if_of_t (t : t) = 
+      let i = {I.req = t.req.s; resp = t.resp.d} in
+      let o = {O.req = t.req.d; resp = t.resp.s} in
+      i, o
+
+    let create_wires () =
+      t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
   end
   
   module WritePort = struct
-    module I = struct
+    module Data = struct
       type 'a t =
-        { valid : 'a
-        ; ip : 'a [@bits 32]
+        { ip : 'a [@bits 32]
         ; mac : 'a [@bits 48]
         }
       [@@deriving sexp_of, hardcaml]
     end
+
+    module Request = Transaction.Make(Data)
   
-    type t =
-      { i : Signal.t I.t
-      }
+    module I = Request.Src
+    module O = Request.Dst
+
+    type t = Request.t
   
-    let t_of_if (i : Signal.t I.t) = {i}
-    let if_of_t (t : t) = t.i
-    let create_wires () = t_of_if (I.Of_signal.wires ())
+    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
+      Request.t_of_if i o
+
+    let if_of_t (t : t) = 
+      Request.if_of_t t
+
+    let create_wires () =
+      Request.create_wires ()
+
   end
   
   module I = struct
@@ -69,6 +99,7 @@ module Table = struct
   module O = struct
     type 'a t = 
       { query : 'a ReadPort.O.t
+      ; write : 'a WritePort.O.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
@@ -88,24 +119,28 @@ module Table = struct
     let open Signal in
     let (--) = Scope.naming scope in
   
-    let hash = Hashes.crc32 (module Signal) (ones 32) write_port.ip -- "write_hash" in
+    let hash = Hashes.crc32 (module Signal) (ones 32) write_port.data.ip -- "write_hash" in
   
     let entry = Entry.Of_signal.wires () in
     let entry_d = Entry.Of_signal.reg spec entry in
   
     entry.valid <== vdd;
-    entry.ip <== write_port.ip;
-    entry.mac <== write_port.mac;
+    entry.ip <== write_port.data.ip;
+    entry.mac <== write_port.data.mac;
   
     ram_write_port.write_address <== reg spec (sel_bottom hash (width ram_write_port.write_address));
     ram_write_port.write_enable <== reg spec write_port.valid;
-    ram_write_port.write_data <== Entry.Of_signal.pack entry_d
+    ram_write_port.write_data <== Entry.Of_signal.pack entry_d;
+
+    let write_port_out = WritePort.O.Of_signal.wires () in
+    write_port_out.ready <== vdd;
+    write_port_out
   
   let query_path scope spec (read_port_in : Signal.t ReadPort.I.t) ram_read_port ram_read_data = 
     let open Signal in
     let (--) = Scope.naming scope in
   
-    let hash = Hashes.crc32 (module Signal) (ones 32) read_port_in.ip -- "query_hash" in
+    let hash = Hashes.crc32 (module Signal) (ones 32) read_port_in.req.data.ip -- "query_hash" in
   
     let read_port_out = ReadPort.O.Of_signal.wires () in
   
@@ -114,13 +149,13 @@ module Table = struct
     let stored_q_valid = Always.Variable.reg spec ~width:1 in
     let resp_valid = Always.Variable.reg spec ~width:1 in
   
-    let stall_second_stage = resp_valid.value &: ((~:) read_port_in.resp_ready) in
+    let stall_second_stage = resp_valid.value &: ((~:) read_port_in.resp.ready) in
     let stall_first_stage = stored_q_valid.value &: stall_second_stage in
   
-    let store_query = read_port_in.req_valid &: ((~:) stall_first_stage) in
+    let store_query = read_port_in.req.valid &: ((~:) stall_first_stage) in
     let process_query = stored_q_valid.value &: ((~:) stall_second_stage) in
   
-    let stored_ip = reg spec ~enable:store_query read_port_in.ip in
+    let stored_ip = reg spec ~enable:store_query read_port_in.req.data.ip in
     let stored_hash = reg spec ~enable:store_query hash in
   
     let processed_ip = reg spec ~enable:process_query stored_ip in
@@ -134,7 +169,7 @@ module Table = struct
   
       if_ process_query [
         resp_valid <--. 1;
-      ] @@ elif read_port_in.resp_ready [
+      ] @@ elif read_port_in.resp.ready [
         resp_valid <--. 0;
       ] [];
     ]);
@@ -142,11 +177,11 @@ module Table = struct
     ram_read_port.read_address <== (sel_bottom stored_hash (width ram_read_port.read_address));
     ram_read_port.read_enable <== process_query;
   
-    read_port_out.mac <== entry.mac;
-    read_port_out.resp_valid <== resp_valid.value;
-    read_port_out.error <== (((~:) entry.valid) |: (entry.ip <>: processed_ip));
+    read_port_out.resp.data.mac <== entry.mac;
+    read_port_out.resp.valid <== resp_valid.value;
+    read_port_out.resp.data.error <== (((~:) entry.valid) |: (entry.ip <>: processed_ip));
   
-    read_port_out.req_ready <== ((~:) stall_first_stage);
+    read_port_out.req.ready <== ((~:) stall_first_stage);
   
     read_port_out
   
@@ -180,10 +215,10 @@ module Table = struct
         ()
     in
   
-    write_path scope spec input.write ram_write_port;
+    let write_port_out = write_path scope spec input.write ram_write_port in 
     let read_port_out = query_path scope spec input.query ram_read_port (Array.get ram 0) in
   
-    {O.query = read_port_out}
+    {O.query = read_port_out; write = write_port_out}
   
   let hierarchical
         ~capacity
@@ -197,10 +232,10 @@ module Table = struct
     let clear = Reg_spec.clear spec in
   
     let qp_i, qp_o = ReadPort.if_of_t query_port in
-    let wp_i = WritePort.if_of_t write_port in
+    let wp_i, wp_o = WritePort.if_of_t write_port in
   
     let i = {I.clock; clear; query = qp_i; write = wp_i} in
-    let o = {O.query = qp_o} in
+    let o = {O.query = qp_o; write = wp_o} in
   
     let o2 = H.hierarchical ~scope ~name:"arp_table" (create ~capacity) i in
     O.Of_signal.assign o o2;
@@ -236,8 +271,8 @@ module Table = struct
           ]
       ]);
   
-      write_port.ip <== ip.value;
-      write_port.mac <== mac_hi.value @: mac_lo.value;
+      write_port.data.ip <== ip.value;
+      write_port.data.mac <== mac_hi.value @: mac_lo.value;
       write_port.valid <== reg spec ready_next.value;
   
       let bus_outs = Agent.outputs bus in
@@ -288,9 +323,9 @@ let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) =
   EthArpTst.apply arp_in_resp ~f:(fun ~valid ~data ->
     let open Signal in
 
-    table_write_port.i.valid <== valid;
-    table_write_port.i.ip <== data.snd.spa;
-    table_write_port.i.mac <== data.snd.sha;
+    table_write_port.s.valid <== valid;
+    table_write_port.s.data.ip <== data.snd.spa;
+    table_write_port.s.data.mac <== data.snd.sha;
 
     Signal.vdd
   );
