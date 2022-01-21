@@ -1,4 +1,4 @@
 (executable
  (name main)
  (modules main)
- (libraries hardcaml lb_dataplane lb_dataplane_test_lib))
+ (libraries lb_dataplane lb_dataplane_test_lib tuntap lwt.unix macaddr))

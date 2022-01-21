@@ -173,7 +173,7 @@ module AvalonFlowConsumer = struct
   ; i : Bits.t ref Flow.AvalonST.I.t
   ; o : Bits.t ref Flow.AvalonST.O.t
   ; buff : Buffer.t
-  ; mutable transfers : bytes list
+  ; mutable transfers : bytes Linked_queue.t
   }
 
   let comb t = 
@@ -192,7 +192,7 @@ module AvalonFlowConsumer = struct
       Buffer.add_bytes t.buff bytes_to_add;
 
       if Bits.is_vdd !(t.i.endofpacket) then (
-        t.transfers <- (Buffer.contents_bytes t.buff) :: t.transfers;
+        Linked_queue.enqueue t.transfers (Buffer.contents_bytes t.buff);
         Buffer.clear t.buff
       )
     )
@@ -202,12 +202,11 @@ module AvalonFlowConsumer = struct
      i;
      o;
      buff = Buffer.create 32;
-     transfers = []
+     transfers = Linked_queue.create ()
     }
 
-   let reset t =
-    Buffer.clear t.buff;
-    t.transfers <- []
+  let take_transfer t =
+    Linked_queue.dequeue t.transfers
 
   let expect_data t =
     let print_transfer b =
@@ -220,7 +219,7 @@ module AvalonFlowConsumer = struct
       Stdio.print_endline (hexdump ^ "\n");
     in
 
-    List.rev t.transfers |> List.iter ~f:print_transfer
+    Linked_queue.to_list t.transfers |> List.iter ~f:print_transfer
 
 end
 
