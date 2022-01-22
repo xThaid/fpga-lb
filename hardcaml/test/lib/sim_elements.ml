@@ -221,6 +221,15 @@ module AvalonFlowConsumer = struct
 
     Linked_queue.to_list t.transfers |> List.iter ~f:print_transfer
 
+  let expect_data_digest t =
+    let transfers_raw = 
+      Linked_queue.to_list t.transfers |>
+      List.concat_map ~f:(fun transfer -> Bytes.to_list transfer) |>
+      Bytes.of_char_list
+    in
+    let digest = Md5_lib.to_hex (Md5_lib.bytes transfers_raw) in
+    Stdio.print_s [%message (digest : string)]
+
 end
 
 module BusHost (A : Bus.Agent.S) = struct

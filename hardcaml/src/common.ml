@@ -43,3 +43,14 @@ module IPv4Header = struct
     }
   [@@deriving sexp_of, hardcaml]
 end
+
+module ICMPEchoRequest = struct
+  type 'a t =
+    { type_of_msg : 'a [@bits 8]
+    ; code : 'a [@bits 8]
+    ; checksum : 'a [@bits 16]
+    ; identifier : 'a [@bits 16]
+    ; seq_number : 'a [@bits 16]
+    }
+  [@@deriving sexp_of, hardcaml]
+end

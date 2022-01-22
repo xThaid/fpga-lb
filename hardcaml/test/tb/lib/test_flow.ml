@@ -518,7 +518,7 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     let tst = Serializer.deserialize spec f1 in
 
     let hdr_transf = Header.map_comb tst ~f:(fun _ ->
-      HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:72 "b0b1b2b3b4b5b6b7b8")
+      HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:Header.data_len "b0b1b2b3b4b5b6b7b8b9babb")
     ) in
 
     let f1 = Serializer.serialize spec hdr_transf in
@@ -587,16 +587,16 @@ let%expect_test "packetizer_full_unaligned" =
   FlowConsumer.expect_data consumer;
 
   [%expect {|
-    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    b3b4b5b6 b7b8b9ba bb0a0b0c 0d0e0f10
     11121314 15161718 191a1b1c 1d1e1f
 
-    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    b3b4b5b6 b7b8b9ba bb0a0b0c 0d0e0f10
     11121314 15161718 191a1b1c 1d1e1f
 
-    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    b3b4b5b6 b7b8b9ba bb0a0b0c 0d0e0f10
     11121314 15161718 191a1b1c 1d
 
-    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    b3b4b5b6 b7b8b9ba bb0a0b0c 0d0e0f10
     11121314 15161718 191a1b1c |}]
 
 let%expect_test "packetizer_full_fast_unaligned" =
@@ -627,14 +627,52 @@ let%expect_test "packetizer_full_fast_unaligned" =
   FlowConsumer.expect_data consumer;
 
   [%expect {|
-    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    b3b4b5b6 b7b8b9ba bb0a0b0c 0d0e0f10
     11121314 15161718 191a1b1c 1d1e1f
 
-    b0b1b2b3 b4b5b6b7 b86d6e6f 70717273
+    b3b4b5b6 b7b8b9ba bb6d6e6f 70717273
     74757677 78797a7b 7c7d7e7f 80818283
     84858687 88898a8b 8c8d8e8f
 
-    b0b1b2b3 b4b5b6b7 b80a0b0c 0d0e0f10
+    b3b4b5b6 b7b8b9ba bb0a0b0c 0d0e0f10
+    11121314 15161718 191a1b1c 1d |}]
+
+let%expect_test "packetizer_full_fast_aligned" =
+  let module PacketizerFullSim = PacketizerFullSim(TestDataAligned) in
+  let module Sim = Sim.Sim(PacketizerFullSim) in
+  
+  let sim = Sim.create ~name:"packetizer_full_unaligned_aligned" ~gtkwave:false () in
+
+  let inputs = Sim.inputs sim in
+  let outputs = Sim.outputs sim in
+
+  let emitter = FlowEmitter.create inputs.source_tx outputs.source_rx in
+  let consumer = FlowConsumer.create outputs.sink_rx inputs.sink_tx in
+
+  Sim.add_element sim (module FlowEmitter) emitter;
+  Sim.add_element sim (module FlowConsumer) consumer;
+
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 31);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer ~from:100 44);
+  FlowEmitter.add_transfer emitter (FlowEmitter.gen_seq_transfer 29);
+
+  emitter.enabled <- true;
+
+  consumer.enabled <- true;
+
+  Sim.cycle_n sim 45;
+
+  FlowConsumer.expect_data consumer;
+
+  [%expect {|
+    b0b1b2b3 b4b5b6b7 b8b9babb 0d0e0f10
+    11121314 15161718 191a1b1c 1d1e1f
+
+    b0b1b2b3 b4b5b6b7 b8b9babb 70717273
+    74757677 78797a7b 7c7d7e7f 80818283
+    84858687 88898a8b 8c8d8e8f
+
+    b0b1b2b3 b4b5b6b7 b8b9babb 0d0e0f10
     11121314 15161718 191a1b1c 1d |}]
 
 module DepacketizerSim (HeaderData : Interface.S) = struct

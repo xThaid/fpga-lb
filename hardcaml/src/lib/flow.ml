@@ -186,7 +186,7 @@ module Base = struct
         ]
       ];
 
-      Transition, [
+      Transition, if shift <> 0 then [
         source2_ready_next <-- sink.d.ready;
 
         sink_src.data.data <-- (concat_msb [sel_top source1_last_data.value (shift * 8); sel_top source2.s.data.data (word_width - shift * 8)]);
@@ -195,7 +195,7 @@ module Base = struct
         when_ (sink_ready_d &: source2.s.valid) [
           sm.set_next ReadSource2
         ]
-      ];
+      ] else [];
 
       ReadSource2, [
         source2_ready_next <-- (sink.d.ready &: shifter_ready_next);
@@ -516,6 +516,9 @@ module With_header (Data : Interface.S) = struct
     Header.drop t.hdr;
     Base.drop t.flow
 
+  let pipe_source spec t =
+    create (Header.pipe_source spec t.hdr) (Base.pipe_source spec t.flow)
+
   let map_hdr t ~f =
     create (Header.map_comb t.hdr ~f) t.flow
 
@@ -750,5 +753,40 @@ module With_header (Data : Interface.S) = struct
 
     (* TODO: perhaps bufferize sinks? *)
     sinks
+
+  let filter spec source ~f = 
+    let open Signal in
+
+    let synchronized, status = barrier spec source in
+    let filtered = f (Header.data synchronized.hdr) in
+
+    let source_src, source_dst = if_of_t synchronized in
+
+    let busy = Always.Variable.reg ~width:1 spec in
+    let forward = Always.Variable.wire ~default:gnd in
+    let forward_reg = Always.Variable.reg ~width:1 spec in
+
+    Always.(compile [
+      if_ busy.value [
+        forward <-- forward_reg.value;
+        when_ status.last_fired [
+          busy <--. 0;
+        ]
+      ] [
+        when_ status.valid [
+          forward <-- filtered;
+          forward_reg <-- filtered;
+          busy <--. 1;
+        ]
+      ]
+    ]);
+
+    let sink = create_wires () in
+    let sink_s, sink_d = if_of_t sink in
+    
+    Src.Of_signal.assign sink_s source_src;
+    Dst.Of_signal.assign source_dst (Dst.Of_signal.mux2 forward.value sink_d (Dst.map Dst.port_widths ~f:ones));
+
+    gate sink ~enable:forward.value
 
 end

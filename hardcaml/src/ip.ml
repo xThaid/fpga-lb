@@ -1,5 +1,7 @@
 open Hardcaml
 
+module Eth_hdr = Transaction.Make(Common.EthernetHeader)
+module IPv4_hdr = Transaction.Make(Common.IPv4Header)
 module Eth_flow = Flow.With_header(Common.EthernetHeader)
 module IPv4_flow = Flow.With_header(Common.IPv4Header)
 
@@ -27,22 +29,68 @@ module O = struct
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
 
+let calc_checksum (type a) (module B : Comb.S with type t = a) ipv4_hdr =
+  let module IPv4_comb = Common.IPv4Header.Make_comb(B) in
+  Hashes.one_complement_sum (module B) (IPv4_comb.pack ~rev:true ipv4_hdr)
+
+let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) =
+  let open Signal in
+
+  let ip_hdr, ip_hdr2 = IPv4_hdr.fork ip_rx.hdr in
+
+  let module Mapper = Transaction.Mapper(Common.IPv4Header)(Arp.Table.ReadPort.RequestData) in
+  Arp.Table.ReadPort.Request.connect arp_query.req (Mapper.map ip_hdr2 ~f:(fun hdr -> {Arp.Table.ReadPort.RequestData.ip = hdr.dst_ip}));
+
+  let ip_flow = 
+    Flow.Base.pipe_source spec ip_rx.flow |>
+    Flow.Base.pipe_source spec
+  in
+
+  let ip_hdr = 
+    IPv4_hdr.map_comb ip_hdr ~f:(fun data -> { data with hdr_checksum = zero 16}) |> 
+    IPv4_hdr.map_comb ~f:(fun data -> { data with hdr_checksum = calc_checksum (module Signal) data}) |>
+    IPv4_hdr.pipe_source spec
+  in
+
+  let module WithArpResp = Transaction.Of_pair(Arp.Table.ReadPort.ResponseData)(Common.IPv4Header) in
+  let module WithArpRespFlow = Flow.With_header(WithArpResp.Data) in
+
+  let with_arp_resp = 
+    WithArpRespFlow.create (WithArpResp.join_comb arp_query.resp ip_hdr) ip_flow |> 
+    WithArpRespFlow.filter spec ~f:(fun hdr -> ~:(hdr.fst.error))
+  in
+
+  let with_arp_resp1, with_arp_resp2 = WithArpResp.fork with_arp_resp.hdr in
+
+  let ip_tx = IPv4_flow.create (WithArpResp.snd with_arp_resp1) with_arp_resp.flow in
+
+  let module Mapper = Transaction.Mapper(WithArpResp.Data)(Common.EthernetHeader) in
+  let eth_hdr = 
+    Mapper.map with_arp_resp2 ~f:(fun data ->
+      { Common.EthernetHeader.dest_mac = data.fst.mac
+      ; src_mac = of_hex ~width:48 "aabbccddeeff"
+      ; ether_type = of_int ~width:16 0x0800
+      }
+    ) |>
+    Eth_hdr.bufferize spec
+  in
+
+  let flow_out = IPv4_flow.to_flow spec ip_tx in
+  Eth_flow.create eth_hdr flow_out
+
 let create
       (_scope : Scope.t)
-      _spec
+      spec
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
       ~(arp_query : Arp.Table.ReadPort.t) =
-  let open Signal in
-  let _ = arp_query in
 
-  let ip_rx = IPv4_flow.map_hdr ip_rx ~f:(fun ipv4 ->
-    { ipv4 with
-      ttl = ipv4.ttl -:. 1
-    }
-  ) in
+  let eth_tx = egress spec ~ip_rx ~arp_query in
 
-  eth_rx, ip_rx
+  let ip_tx = IPv4_flow.from_flow spec eth_rx.flow in
+  Eth_hdr.drop eth_rx.hdr;
+
+  eth_tx, ip_tx
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in

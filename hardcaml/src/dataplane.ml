@@ -41,12 +41,10 @@ let create
   let arp_tx_eth, arp_query_port = Arp.hierarchical scope spec ~rx:rx_eth_arp in
 
   let lb_ip_tx = IPv4_flow.create_wires () in
-  let lb_ip_tx_i, _ = IPv4_flow.if_of_t lb_ip_tx in
-  IPv4_flow.Src.iter2 lb_ip_tx_i IPv4_flow.Src.port_widths ~f:(fun p i -> Signal.assign p (Signal.zero i));
 
   let ip_tx_eth, ip_tx_ip = Ip.hierarchical scope spec ~eth_rx:rx_eth_ip ~ip_rx:lb_ip_tx ~arp_query:arp_query_port in
 
-  IPv4_flow.drop ip_tx_ip;
+  IPv4_flow.connect lb_ip_tx (IPv4_flow.map_hdr ip_tx_ip ~f:(fun hdr -> {hdr with dst_ip = Signal.of_hex ~width:32 "ff00ff00ff"}));
 
   let tx_eth = Eth_flow.arbitrate spec [arp_tx_eth; ip_tx_eth] in
 

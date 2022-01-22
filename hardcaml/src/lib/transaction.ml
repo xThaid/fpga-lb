@@ -67,6 +67,20 @@ module Make (Data : Interface.S) = struct
     let open Signal in
     t.d.ready <== vdd
 
+  let fork t =
+    let open Signal in
+
+    let tst1 = create_wires () in
+    let tst2 = create_wires () in
+    tst1.s.valid <== (t.s.valid &: tst2.d.ready);
+    tst2.s.valid <== (t.s.valid &: tst1.d.ready);
+    t.d.ready <== (tst1.d.ready &: tst2.d.ready);
+
+    Data.Of_signal.assign tst1.s.data t.s.data;
+    Data.Of_signal.assign tst2.s.data t.s.data;
+    
+    tst1, tst2
+
   let demux n sel tst = 
     let open Signal in
 
@@ -167,4 +181,24 @@ module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
 
     fst, snd
 
+  let fst tst =
+    let t1, t2 = split_comb tst in
+    Signal.assign t2.d.ready Signal.vdd;
+    t1
+
+  let snd tst =
+    let t1, t2 = split_comb tst in
+    Signal.assign t1.d.ready Signal.vdd;
+    t2
+
+end
+
+module Mapper (From : Interface.S) (To : Interface.S) = struct
+  module FromTst = Make(From)
+  module ToTst = Make(To)
+
+  let map (tst : FromTst.t) ~f =
+    let out = ToTst.create ~valid:tst.s.valid ~data:(f tst.s.data) in
+    Signal.assign tst.d.ready out.d.ready;
+    out
 end
