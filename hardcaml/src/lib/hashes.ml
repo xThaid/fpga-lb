@@ -38,11 +38,11 @@ let crc32 (type a) (module B : Comb.S with type t = a) state_in data_in =
   let (lfsr_masks_state, lfsr_masks_data) = gen_masks 0x04c11db7 32 32 true in
 
   let state_out_bits = List.map2_exn lfsr_masks_state lfsr_masks_data ~f:(fun state_mask data_mask ->
-    let state_bits = state_in &: (B.constb (Hardcaml.Bits.to_bstr state_mask)) in
-    let data_bits = data_in &: (B.constb (Hardcaml.Bits.to_bstr data_mask)) in
+    let state_bits = state_in &: (B.of_constant (Bits.to_constant state_mask)) in
+    let data_bits = data_in &: (B.of_constant (Bits.to_constant data_mask)) in
     let all_bits = bits_lsb (state_bits @: data_bits) in
-    List.reduce_exn all_bits ~f:(^:))
-  in
+    tree ~arity:2 ~f:(reduce ~f:( ^: )) all_bits
+  ) in
   B.concat_lsb state_out_bits
 
 let one_complement_sum (type a) (module B : Comb.S with type t = a) data =

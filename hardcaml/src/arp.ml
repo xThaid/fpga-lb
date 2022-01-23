@@ -6,281 +6,21 @@ module EthTst = Transaction.Make(Common.EthernetHeader)
 module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket)
 
 module Table = struct
-  module ReadPort = struct
-    module RequestData = struct
-      type 'a t =
-        { ip : 'a [@bits 32]
-        }
-      [@@deriving sexp_of, hardcaml]
-    end
-    module ResponseData = struct
-      type 'a t =
-        { mac : 'a [@bits 48]
-        ; error : 'a
-        }
-      [@@deriving sexp_of, hardcaml]
-    end
-
-    module Request = Transaction.Make(RequestData)
-    module Response = Transaction.Make(ResponseData)
-  
-    module I = struct
-      type 'a t =
-        { req : 'a Request.Src.t
-        ; resp : 'a Response.Dst.t
-        }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-    end
-  
-    module O = struct
-      type 'a t =
-        { req : 'a Request.Dst.t
-        ; resp : 'a Response.Src.t
-        }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-    end
-
-    type t = 
-      { req : Request.t
-      ; resp : Response.t
-      }
-  
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
-      let req = Request.t_of_if i.req o.req in
-      let resp = Response.t_of_if o.resp i.resp in
-      {req; resp}
-
-    let if_of_t (t : t) = 
-      let i = {I.req = t.req.s; resp = t.resp.d} in
-      let o = {O.req = t.req.d; resp = t.resp.s} in
-      i, o
-
-    let create_wires () =
-      t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
-  end
-  
-  module WritePort = struct
-    module Data = struct
-      type 'a t =
-        { ip : 'a [@bits 32]
-        ; mac : 'a [@bits 48]
-        }
-      [@@deriving sexp_of, hardcaml]
-    end
-
-    module Request = Transaction.Make(Data)
-  
-    module I = Request.Src
-    module O = Request.Dst
-
-    type t = Request.t
-  
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
-      Request.t_of_if i o
-
-    let if_of_t (t : t) = 
-      Request.if_of_t t
-
-    let create_wires () =
-      Request.create_wires ()
-
-  end
-  
-  module I = struct
+  module Key = struct
     type 'a t =
-      { clock : 'a
-      ; clear : 'a
-      ; query : 'a ReadPort.I.t 
-      ; write : 'a WritePort.I.t
-      }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-  end
-  
-  module O = struct
-    type 'a t = 
-      { query : 'a ReadPort.O.t
-      ; write : 'a WritePort.O.t
-      }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-  end
-  
-  module Entry = struct
-    type 'a t =
-      { valid : 'a
-      ; ip : 'a [@bits 32]
-      ; mac : 'a [@bits 48]
+      { ip : 'a [@bits 32]
       }
     [@@deriving sexp_of, hardcaml]
-  
-    let len = List.fold Names_and_widths.port_widths ~init:0 ~f:(+)
   end
-  
-  let write_path scope spec (write_port : Signal.t WritePort.I.t) ram_write_port =
-    let open Signal in
-    let (--) = Scope.naming scope in
-  
-    let hash = Hashes.crc32 (module Signal) (ones 32) write_port.data.ip -- "write_hash" in
-  
-    let entry = Entry.Of_signal.wires () in
-    let entry_d = Entry.Of_signal.reg spec entry in
-  
-    entry.valid <== vdd;
-    entry.ip <== write_port.data.ip;
-    entry.mac <== write_port.data.mac;
-  
-    ram_write_port.write_address <== reg spec (sel_bottom hash (width ram_write_port.write_address));
-    ram_write_port.write_enable <== reg spec write_port.valid;
-    ram_write_port.write_data <== Entry.Of_signal.pack entry_d;
 
-    let write_port_out = WritePort.O.Of_signal.wires () in
-    write_port_out.ready <== vdd;
-    write_port_out
-  
-  let query_path scope spec (read_port_in : Signal.t ReadPort.I.t) ram_read_port ram_read_data = 
-    let open Signal in
-    let (--) = Scope.naming scope in
-  
-    let hash = Hashes.crc32 (module Signal) (ones 32) read_port_in.req.data.ip -- "query_hash" in
-  
-    let read_port_out = ReadPort.O.Of_signal.wires () in
-  
-    let entry = Entry.Of_signal.unpack ram_read_data in
-  
-    let stored_q_valid = Always.Variable.reg spec ~width:1 in
-    let resp_valid = Always.Variable.reg spec ~width:1 in
-  
-    let stall_second_stage = resp_valid.value &: ((~:) read_port_in.resp.ready) in
-    let stall_first_stage = stored_q_valid.value &: stall_second_stage in
-  
-    let store_query = read_port_in.req.valid &: ((~:) stall_first_stage) in
-    let process_query = stored_q_valid.value &: ((~:) stall_second_stage) in
-  
-    let stored_ip = reg spec ~enable:store_query read_port_in.req.data.ip in
-    let stored_hash = reg spec ~enable:store_query hash in
-  
-    let processed_ip = reg spec ~enable:process_query stored_ip in
-  
-    Always.(compile [
-      if_ store_query [
-        stored_q_valid <--. 1;
-      ] @@ elif process_query [
-        stored_q_valid <--. 0;
-      ] [];
-  
-      if_ process_query [
-        resp_valid <--. 1;
-      ] @@ elif read_port_in.resp.ready [
-        resp_valid <--. 0;
-      ] [];
-    ]);
-  
-    ram_read_port.read_address <== (sel_bottom stored_hash (width ram_read_port.read_address));
-    ram_read_port.read_enable <== process_query;
-  
-    read_port_out.resp.data.mac <== entry.mac;
-    read_port_out.resp.valid <== resp_valid.value;
-    read_port_out.resp.data.error <== (((~:) entry.valid) |: (entry.ip <>: processed_ip));
-  
-    read_port_out.req.ready <== ((~:) stall_first_stage);
-  
-    read_port_out
-  
-  let create ~capacity (scope : Scope.t) (input : Signal.t I.t) =
-    let spec = Reg_spec.create ~clock:input.clock ~clear:input.clear () in
-  
-    let addr_width = Bits.address_bits_for capacity in
-  
-    let ram_read_port =
-      { Signal.read_clock = input.clock
-      ; read_address = Signal.wire addr_width
-      ; read_enable = Signal.wire 1
+  module Data = struct
+    type 'a t =
+      { mac : 'a [@bits 48]
       }
-    in
-  
-    let ram_write_port =
-      { Signal.write_clock = input.clock
-      ; write_address = Signal.wire addr_width
-      ; write_enable = Signal.wire 1
-      ; write_data = Signal.wire Entry.len
-      }
-    in
-  
-    let ram =
-      Ram.create_named
-        ~name:(Scope.name scope "arp_table_mem")
-        ~collision_mode:Read_before_write
-        ~size:capacity
-        ~write_ports:[|ram_write_port|]
-        ~read_ports:[|ram_read_port|]
-        ()
-    in
-  
-    let write_port_out = write_path scope spec input.write ram_write_port in 
-    let read_port_out = query_path scope spec input.query ram_read_port (Array.get ram 0) in
-  
-    {O.query = read_port_out; write = write_port_out}
-  
-  let hierarchical
-        ~capacity
-        (scope : Scope.t)
-        spec
-        ~(query_port : ReadPort.t)
-        ~(write_port : WritePort.t) =
-    let module H = Hierarchy.In_scope(I)(O) in
-  
-    let clock = Reg_spec.clock spec in
-    let clear = Reg_spec.clear spec in
-  
-    let qp_i, qp_o = ReadPort.if_of_t query_port in
-    let wp_i, wp_o = WritePort.if_of_t write_port in
-  
-    let i = {I.clock; clear; query = qp_i; write = wp_i} in
-    let o = {O.query = qp_o; write = wp_o} in
-  
-    let o2 = H.hierarchical ~scope ~name:"arp_table" (create ~capacity) i in
-    O.Of_signal.assign o o2;
-  
-  module WriteBusAdapter = struct
-    module Agent = Bus.Agent.Make (
-      struct
-        let addr_len = 2
-      end)
-  
-    let create spec ~(bus : Agent.t) ~(write_port : Signal.t WritePort.I.t) =
-      let open Signal in
-  
-      let mac_lo = Always.Variable.reg ~width:32 spec in
-      let mac_hi = Always.Variable.reg ~width:16 spec in
-      let ip = Always.Variable.reg ~width:32 spec in
-      let ready_next = Always.Variable.wire ~default:gnd in
-  
-      Always.(compile [
-          Agent.on_write bus [
-            0, (fun data -> [
-              mac_lo <-- data;
-            ]);
-            
-            1, (fun data -> [
-              mac_hi <-- sel_bottom data 16;
-            ]);
-  
-            2, (fun data -> [
-              ip <-- data;
-              ready_next <-- vdd;
-            ]);
-          ]
-      ]);
-  
-      write_port.data.ip <== ip.value;
-      write_port.data.mac <== mac_hi.value @: mac_lo.value;
-      write_port.valid <== reg spec ready_next.value;
-  
-      let bus_outs = Agent.outputs bus in
-  
-      bus_outs.waitrequest <== gnd;
-      bus_outs.readdata <== zero 32
-  
+    [@@deriving sexp_of, hardcaml]
   end
+
+  include Hash_table.Make(Key)(Data)
 end
 
 module Config = struct
@@ -297,7 +37,7 @@ module I = struct
     ; clear : 'a
     ; rx : 'a Eth_flow.Src.t
     ; tx : 'a Eth_flow.Dst.t
-    ; query : 'a Table.ReadPort.I.t
+    ; query : 'a Table.QueryPort.I.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -306,7 +46,7 @@ module O = struct
   type 'a t = 
     { rx : 'a Eth_flow.Dst.t 
     ; tx : 'a Eth_flow.Src.t
-    ; query : 'a Table.ReadPort.O.t
+    ; query : 'a Table.QueryPort.O.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -324,8 +64,8 @@ let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) =
     let open Signal in
 
     table_write_port.s.valid <== valid;
-    table_write_port.s.data.ip <== data.snd.spa;
-    table_write_port.s.data.mac <== data.snd.sha;
+    Table.Key.Of_signal.assign table_write_port.s.data.key {Table.Key.ip = data.snd.spa};
+    Table.Data.Of_signal.assign table_write_port.s.data.data {Table.Data.mac = data.snd.sha};
 
     Signal.vdd
   );
@@ -362,11 +102,11 @@ let create
       spec
       ~(rx : Eth_flow.t)
       ~(tx : Eth_flow.t)
-      ~(query : Table.ReadPort.t) =
+      ~(query : Table.QueryPort.t) =
   
   let table_write_port = Table.WritePort.create_wires () in
   
-  Table.hierarchical ~capacity:Config.arp_table_capacity scope spec ~query_port:query ~write_port:table_write_port;
+  Table.hierarchical ~name:"arp_table" ~capacity:Config.arp_table_capacity scope spec ~query_port:query ~write_port:table_write_port;
   
   Eth_flow.connect tx (datapath spec ~rx table_write_port)
 
@@ -375,7 +115,7 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
 
   let rx = Eth_flow.t_of_if i.rx o.rx in
   let tx = Eth_flow.t_of_if o.tx i.tx in
-  let query = Table.ReadPort.t_of_if i.query o.query in
+  let query = Table.QueryPort.t_of_if i.query o.query in
 
   create scope spec ~rx ~tx ~query
 
@@ -389,11 +129,11 @@ let hierarchical
   let clear = Reg_spec.clear spec in
 
   let tx = Eth_flow.create_wires () in
-  let query = Table.ReadPort.create_wires () in
+  let query = Table.QueryPort.create_wires () in
 
   let rx_i, rx_o = Eth_flow.if_of_t rx in
   let tx_i, tx_o = Eth_flow.if_of_t tx in
-  let query_i, query_o = Table.ReadPort.if_of_t query in
+  let query_i, query_o = Table.QueryPort.if_of_t query in
 
   let i = {I.clock; clear; rx = rx_i; tx = tx_o; query = query_i} in
   let o = {O.rx = rx_o; tx = tx_i; query = query_o} in
