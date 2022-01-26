@@ -179,9 +179,7 @@ module Make (Key : Interface.S) (Data : Interface.S) = struct
     Data.Of_signal.assign read_port_out.resp.data.data entry.data;
     read_port_out.resp.valid <== resp_valid.value;
 
-    let key_not_equal k1 k2 = (Key.Of_signal.pack k1) <>: (Key.Of_signal.pack k2) in
-
-    read_port_out.resp.data.found <== (((~:) entry.valid) |: (key_not_equal entry.key processed_key));
+    read_port_out.resp.data.found <== (entry.valid &: (Key.Of_signal.pack entry.key ==: Key.Of_signal.pack processed_key));
   
     read_port_out.req.ready <== ((~:) stall_first_stage);
   
@@ -240,7 +238,7 @@ module Make (Key : Interface.S) (Data : Interface.S) = struct
     let i = {I.clock; clear; query = qp_i; write = wp_i} in
     let o = {O.query = qp_o; write = wp_o} in
   
-    let o2 = H.hierarchical ~scope ~name:(name ^ "hashtbl") (create ~capacity) i in
+    let o2 = H.hierarchical ~scope ~name:(name ^ "_hashtbl") (create ~capacity) i in
     O.Of_signal.assign o o2;
 
 end

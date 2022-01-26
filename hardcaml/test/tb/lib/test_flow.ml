@@ -414,7 +414,11 @@ let%expect_test "flow_with_hdr_synchronize" =
   FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:160 16);
   FlowEmitter.add_transfer flow_emitter (FlowEmitter.gen_seq_transfer ~from:192 16);
 
-  let create_data data = TestData.t_of_sexp String.t_of_sexp (Parsexp.Single.parse_string_exn data) in
+  let create_data data =
+    Parsexp.Single.parse_string_exn data |>
+    TestData.t_of_sexp String.t_of_sexp |>
+    TestData.map2 TestData.port_widths ~f:(fun width x -> Bits.of_hex ~width x)
+  in
 
   Emitter.add_transfer tst_emitter (create_data "((field1 05060708090a) (field2 0b) (field3 0c0d))");
   Emitter.add_transfer tst_emitter (create_data "((field1 202122232425) (field2 26) (field3 2728))");
@@ -980,7 +984,11 @@ let%expect_test "flow_with_hdr_arbitrate" =
   Sim.add_element sim (module Emitter) source3;
   Sim.add_element sim (module Consumer) sink;
 
-  let create_data data = TestData.t_of_sexp String.t_of_sexp (Parsexp.Single.parse_string_exn data) in
+  let create_data data =
+    Parsexp.Single.parse_string_exn data |>
+    TestData.t_of_sexp String.t_of_sexp |>
+    TestData.map2 TestData.port_widths ~f:(fun width x -> Bits.of_hex ~width x)
+  in
 
   Emitter.add_transfer source1 (create_data "((field1 000000000000) (field2 00) (field3 0000))") (FlowEmitter.gen_seq_transfer ~from:0 16);
   Emitter.add_transfer source1 (create_data "((field1 111111111111) (field2 11) (field3 1111))") (FlowEmitter.gen_seq_transfer ~from:16 15);
@@ -1159,7 +1167,11 @@ let%expect_test "flow_with_hdr_dispatcher" =
   Sim.add_element sim (module Consumer) sink3;
   Sim.add_element sim (module Emitter) source;
 
-  let create_data data = TestData.t_of_sexp String.t_of_sexp (Parsexp.Single.parse_string_exn data) in
+  let create_data data =
+    Parsexp.Single.parse_string_exn data |>
+    TestData.t_of_sexp String.t_of_sexp |>
+    TestData.map2 TestData.port_widths ~f:(fun width x -> Bits.of_hex ~width x)
+  in
 
   Emitter.add_transfer source (create_data "((field1 000000000000) (field2 12) (field3 3123))") (FlowEmitter.gen_seq_transfer ~from:0 16);
   Emitter.add_transfer source (create_data "((field1 111111111111) (field2 10) (field3 1111))") (FlowEmitter.gen_seq_transfer ~from:16 15);

@@ -1,14 +1,14 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Sat Jan 22 00:09:22 2022
+[*] Wed Jan 26 11:20:33 2022
 [*]
 [dumpfile] "(null)"
 [savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/dataplane.gtkw"
-[timestart] 1980
+[timestart] 583
 [size] 1920 1023
 [pos] -1 -1
-*-7.000000 2176 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
-[sst_width] 247
+*-7.000000 683 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 407
 [signals_width] 380
 [sst_expanded] 1
 [sst_vpaned_height] 244
@@ -36,8 +36,51 @@ inputs.tx_ready
 @200
 -
 -
+@22
+various.balancer_in_hdr_src_ip[31:0]
+various.balancer_in_hdr_dst_ip[31:0]
+@28
+various.balancer_in_hdr_valid
+various.balancer_in_hdr_ready
+@22
+various.balancer_in_flow_data[31:0]
+@28
+various.balancer_in_flow_last
+various.balancer_in_flow_ready
+various.balancer_in_flow_valid
+@200
 -
+@22
+various.forked_hdr_src_ip[31:0]
+various.forked_hdr_dst_ip[31:0]
+@28
+various.forked_hdr_valid
+various.forked_hdr_ready
+@22
+various.forked_flow_data[31:0]
+@28
+various.forked_flow_ready
+various.forked_flow_valid
+@200
 -
+@22
+various.encap_data[31:0]
+@28
+various.encap_ready
+various.encap_valid
+@200
 -
+@22
+various.balancer_out_hdr_src_ip[31:0]
+various.balancer_out_hdr_dst_ip[31:0]
+@28
+various.balancer_out_hdr_valid
+various.balancer_out_hdr_ready
+@22
+various.balancer_out_flow_data[31:0]
+@28
+various.balancer_out_flow_last
+various.balancer_out_flow_ready
+various.balancer_out_flow_valid
 [pattern_trace] 1
 [pattern_trace] 0

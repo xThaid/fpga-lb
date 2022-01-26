@@ -44,7 +44,7 @@ let create
 
   let ip_tx_eth, ip_tx_ip = Ip.hierarchical scope spec ~eth_rx:rx_eth_ip ~ip_rx:lb_ip_tx ~arp_query:arp_query_port in
 
-  IPv4_flow.connect lb_ip_tx (IPv4_flow.map_hdr ip_tx_ip ~f:(fun hdr -> {hdr with dst_ip = Signal.of_hex ~width:32 "ff00ff00ff"}));
+  IPv4_flow.connect lb_ip_tx (Balancer.hierarchical scope spec ~ip_rx:ip_tx_ip);
 
   let tx_eth = Eth_flow.arbitrate spec [arp_tx_eth; ip_tx_eth] in
 

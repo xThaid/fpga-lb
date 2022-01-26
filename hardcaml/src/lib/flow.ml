@@ -219,7 +219,7 @@ module Base = struct
     
     bufferize ~ready_ahead:true spec sink
 
-  (* Source must have read latency 0. Sinks have ready latency 1. *)
+  (* Source must have read latency 0. Sink 1 have ready latency 1. *)
   let split spec ~hdr_length ~(source : t) =
     let open Signal in
 
@@ -292,7 +292,7 @@ module Base = struct
     sink2.s.data.empty <== shifted_source.data.empty;
     sink2.s.valid <== sink2_valid.value;
 
-    sink1, bufferize ~ready_ahead:true spec sink2
+    sink1, bufferize ~ready_ahead:true spec sink2 (* TODO: this is probably broken *)
 end
 
 module Serializer (Data : Interface.S) = struct
@@ -516,6 +516,11 @@ module With_header (Data : Interface.S) = struct
     Header.drop t.hdr;
     Base.drop t.flow
 
+  let fork t =
+    let hdr1, hdr2 = Header.fork t.hdr in
+    let flow1, flow2 = Base.fork t.flow in
+    create hdr1 flow1, create hdr2 flow2
+
   let pipe_source spec t =
     create (Header.pipe_source spec t.hdr) (Base.pipe_source spec t.flow)
 
@@ -674,11 +679,12 @@ module With_header (Data : Interface.S) = struct
     let module Serializer = Serializer(Data) in
     let f1, f2 = Base.split spec ~hdr_length:Header.data_len ~source:flow in
     let hdr = Serializer.deserialize spec f1 in
-    fst (barrier spec (create hdr f2))
+    fst (barrier spec (create hdr f2)) (* TODO: remove the barrier? *)
 
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
-    let f1 = Serializer.serialize spec flow.hdr in
+    let hdr = Header.apply_names ~prefix:"data_" flow.hdr in
+    let f1 = Serializer.serialize spec hdr in
     Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow
 
   let arbitrate spec sources =

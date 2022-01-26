@@ -57,7 +57,7 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) =
 
   let with_arp_resp = 
     WithArpRespFlow.create (WithArpResp.join_comb arp_query.resp ip_hdr) ip_flow |> 
-    WithArpRespFlow.filter spec ~f:(fun hdr -> ~:(hdr.fst.found))
+    WithArpRespFlow.filter spec ~f:(fun hdr -> hdr.fst.found)
   in
 
   let with_arp_resp1, with_arp_resp2 = WithArpResp.fork with_arp_resp.hdr in

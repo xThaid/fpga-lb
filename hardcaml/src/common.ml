@@ -44,6 +44,16 @@ module IPv4Header = struct
   [@@deriving sexp_of, hardcaml]
 end
 
+module UDPHeader = struct
+  type 'a t =
+    { src_port : 'a [@bits 16]
+    ; dst_port : 'a [@bits 16]
+    ; length : 'a [@bits 16]
+    ; checksum : 'a [@bits 16]
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
 module ICMPEchoRequest = struct
   type 'a t =
     { type_of_msg : 'a [@bits 8]

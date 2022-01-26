@@ -358,7 +358,7 @@ module TransactionConsumer (Data : Interface.S) = struct
   module Transaction = Transaction.Make(Data)
 
   type t =
-    { mutable consumed : string Data.t list 
+    { mutable consumed : Bits.t Data.t list 
     ; mutable enabled : bool
     ; tst_s : Bits.t ref Transaction.Src.t
     ; tst_d : Bits.t ref Transaction.Dst.t
@@ -376,10 +376,12 @@ module TransactionConsumer (Data : Interface.S) = struct
 
   let seq t =
     if (Bits.to_bool !(t.tst_s.valid)) && t.enabled then
-        t.consumed <- (Data.map t.tst_s.data ~f:(fun x -> Bits.to_constant !x |> Constant.to_hex_string ~signedness:Unsigned)) :: t.consumed
+        t.consumed <- (Data.map t.tst_s.data ~f:(fun x -> !x)) :: t.consumed
 
   let expect_reads t = 
-    let consumed = List.rev t.consumed in
+    let consumed =
+      List.rev_map t.consumed ~f:(fun x -> Data.map x ~f:(fun x -> Bits.to_constant x |> Constant.to_hex_string ~signedness:Unsigned))
+    in
     Stdio.print_s [%message (consumed : string Data.t list)]
 end
 
@@ -387,8 +389,8 @@ module TransactionEmitter (Data : Interface.S) = struct
   module Transaction = Transaction.Make(Data)
 
   type t =
-    { transfers : string Data.t Linked_queue.t
-    ; mutable pending_transfer : string Data.t Option.t
+    { transfers : Bits.t Data.t Linked_queue.t
+    ; mutable pending_transfer : Bits.t Data.t Option.t
     ; mutable enabled : bool
     ; tst_s : Bits.t ref Transaction.Src.t
     ; tst_d : Bits.t ref Transaction.Dst.t
@@ -415,7 +417,7 @@ module TransactionEmitter (Data : Interface.S) = struct
     | None -> ()
     | Some transfer -> (
       t.tst_s.valid := Bits.of_bool t.enabled;
-      Data.iter3 Data.port_widths t.tst_s.data transfer ~f:(fun width a b -> a := Bits.of_hex ~width b)
+      Data.iter2 t.tst_s.data transfer ~f:(fun a b -> a := b)
     )
 
   let seq t =
@@ -466,7 +468,7 @@ module FlowWithHeaderConsumer (Data : Interface.S) = struct
 
   type t =
     { mutable enabled : bool
-    ; transfers : (string Data.t * bytes) Linked_queue.t
+    ; transfers : (Bits.t Data.t * bytes) Linked_queue.t
     ; tst_cons : TstConsumer.t
     ; flow_cons : FlowConsumer.t
     }
