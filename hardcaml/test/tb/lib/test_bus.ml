@@ -24,11 +24,11 @@ module InterconnectSim = struct
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
 
-  let create_agent (type a) (module A : Bus.Agent.S with type t = a) spec agent off enabled =
+  let create_agent (type a) (module A : Bus.Agent.S with type t = a) spec off enabled =
     let open Signal in
 
-    let i = A.inputs agent in
-    let o = A.outputs agent in
+    let agent = A.create_wires () in
+    let i, o = A.if_of_t agent in
 
     let readdata = Always.Variable.reg ~width:32 spec in
 
@@ -39,28 +39,30 @@ module InterconnectSim = struct
     ]);
 
     o.waitrequest <== (Signal.of_bool (not enabled));
-    o.readdata <== readdata.value
+    o.readdata <== readdata.value;
+
+    Bus.Agent.build (module A) agent
 
   let create_fn (_scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
-    let module B = Bus.Interconnect.Builder in
+    let module IC = Bus.Interconnect in
 
     let spec = Reg_spec.create ~clock:i.clock ~reset:i.reset () in
 
-    let host = BusHost.create i.host (BusHost.O.Of_signal.wires ()) in
+    let host = BusHost.t_of_if i.host (BusHost.O.Of_signal.wires ()) in
 
-    let builder = B.create (Bus.Agent.build (module BusHost) host) in
+    let ic = IC.create (Bus.Agent.build (module BusHost) host) in
 
-    let agent_a = B.add_agent builder (module BusAgent2) 0 3 in
-    let agent_b = B.add_agent builder (module BusAgent2) 4 6 in
-    let agent_c = B.add_agent builder (module BusAgent3) 7 13 in
+    let agent_a = create_agent (module BusAgent2) spec 100 true in
+    let agent_b = create_agent (module BusAgent2) spec 1000 true in
+    let agent_c = create_agent (module BusAgent3) spec 10000 true in
 
-    create_agent (module BusAgent2) spec agent_a 100 true;
-    create_agent (module BusAgent2) spec agent_b 1000 true;
-    create_agent (module BusAgent3) spec agent_c 10000 true;
+    IC.add_agent ic agent_a 0 3;
+    IC.add_agent ic agent_b 4 6;
+    IC.add_agent ic agent_c 7 13;
 
-    B.complete_comb spec builder;
+    IC.complete_comb ic spec;
 
-    {O.host = BusHost.outputs host
+    {O.host = snd (BusHost.if_of_t host)
     }
 
 end
@@ -71,7 +73,7 @@ let%expect_test "bus_interconnect_comb" =
   let module Agent2 = Sim_elements.BusAgent (InterconnectSim.BusAgent2) in
   let module Agent3 = Sim_elements.BusAgent (InterconnectSim.BusAgent3) in
     
-  let sim = Sim.create ~name:"bus_interconnect_comb" ~gtkwave:false () ~trace:true in
+  let sim = Sim.create ~name:"bus_interconnect_comb" ~gtkwave:false () ~trace:false in
 
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
@@ -87,7 +89,7 @@ let%expect_test "bus_interconnect_comb" =
   Host.schedule_write host 0 4;
   Host.schedule_read host 6;
   Host.schedule_read host 13;
-  Host.schedule_read host 14;
+  Host.schedule_read host 13;
 
   Sim.cycle_n sim 15;
 
@@ -96,7 +98,7 @@ let%expect_test "bus_interconnect_comb" =
   Sim.expect_trace_digest sim;
 
   [%expect {|
-    ("List.rev t.responses" (103 1000 1002 10006 102))
-    8e5a6a8872e00ee48a0d34035a559e37 |}]
+    ("List.rev t.responses" (103 1000 1002 10006 10006))
+    4fbba1d862eaafed48d8769ced8fe220 |}]
 
 

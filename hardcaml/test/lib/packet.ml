@@ -17,6 +17,8 @@ let serialize_ipv4_hdr (pkt : Bits.t Common.IPv4Header.t) =
 let serialize_icmp_echo_req (req : Bits.t Common.ICMPEchoRequest.t) =
   Common.ICMPEchoRequest.Of_bits.pack ~rev:true req |> serialize
 
+let serialize_udp_hdr hdr = Common.UDPHeader.Of_bits.pack ~rev:true hdr |> serialize
+
 let hex_to_bits width str = Bits.of_hex ~width str
 
 let create_eth_hdr src_mac dest_mac ether_type = 
@@ -56,7 +58,7 @@ let create_ipv4_hdr total_length protocol src_ip dst_ip =
   let checksum = Ip.calc_checksum (module Bits) pkt in
   {pkt with hdr_checksum = checksum}
 
-let create_udp_pkt src_port dst_port len =
+let create_udp_hdr src_port dst_port len =
   { Common.UDPHeader.src_port
   ; dst_port
   ; length = Constant.to_hex_string ~signedness:Unsigned (Constant.of_int ~width:16 len)

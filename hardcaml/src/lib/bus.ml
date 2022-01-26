@@ -29,11 +29,11 @@ module Agent = struct
     [@@deriving sexp_of, hardcaml]
     end
 
-    val create : Signal.t I.t -> Signal.t O.t -> t
-    val create_empty : unit -> t
+    val t_of_if : Signal.t I.t -> Signal.t O.t -> t
+    val if_of_t : t -> Signal.t I.t * Signal.t O.t
+    val create_wires : unit -> t
 
-    val inputs : t -> Signal.t I.t
-    val outputs : t -> Signal.t O.t
+    val connect : t -> t -> unit
 
     val on_write : t -> (int * (Signal.t -> Always.t list)) list -> Always.t
 
@@ -76,11 +76,13 @@ module Agent = struct
       ; o : Signal.t O.t
       }
 
-    let create (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
-    let create_empty () = create (I.Of_signal.wires ()) (O.Of_signal.wires ())
+    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) = {i; o}
+    let if_of_t (t : t) =  t.i, t.o
+    let create_wires () = t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
 
-    let inputs t = t.i
-    let outputs t = t.o
+    let connect t1 t2 = 
+      I.Of_signal.assign t1.i t2.i;
+      O.Of_signal.assign t2.o t1.o
 
     let on_write (t : t) (cases : (int * (Signal.t -> Always.t list)) list) =
       let open Signal in
@@ -96,77 +98,67 @@ module Agent = struct
 end
 
 module Interconnect = struct
-  module Builder = struct
-    module AgentInfo = struct
-      type t =
-        { inst : (module Agent.Inst)
-        ; addr_base : int
-        ; addr_end : int
-        }
-    end
-
-    type t = 
-      { host : (module Agent.Inst)
-      ; mutable agents : AgentInfo.t list
+  module AgentInfo = struct
+    type t =
+      { inst : (module Agent.Inst)
+      ; addr_base : int
+      ; addr_end : int
       }
-
-    let create host = 
-      { host
-      ; agents = []
-      }
-
-    let add_agent (type a) t (module A : Agent.S with type t = a) addr_base addr_end =
-      let agent = A.create_empty () in
-      let agent_ins = A.I.Of_signal.apply_names ~prefix:(Int.to_string addr_base) (A.inputs agent) in
-      let agent_out = A.O.Of_signal.apply_names ~prefix:(Int.to_string addr_base) (A.outputs agent) in
-      let agent = A.create agent_ins agent_out in
-
-      let inst = Agent.build (module A) agent in
-
-      let agent_info = {AgentInfo.inst = inst; addr_base; addr_end} in
-
-      t.agents <- agent_info :: t.agents;
-
-      agent
-
-    let complete_comb spec t = 
-      let open Signal in
-
-      let module HostInst = (val t.host) in
-      let module HostAgent = HostInst.Agent in
-
-      let agent_cnt = List.length t.agents in
-      let sorted = List.sort t.agents ~compare:(fun x y -> Int.compare x.addr_base y.addr_base) in
-
-      let sel_onehot = List.init agent_cnt ~f:(fun _ -> wire 1) in
-      let sel = onehot_to_binary (concat_lsb sel_onehot) -- "sel" in
-      let sel_d = reg spec sel -- "sel_d" in
-
-      let host = HostInst.this in
-      let host_in = HostAgent.inputs host in
-      let host_out = HostAgent.outputs host in
-
-      List.iteri sorted ~f:(fun i info ->
-        let module Inst = (val info.inst) in
-        let module Agent = Inst.Agent in
-
-        let ins = Agent.inputs Inst.this in
-
-        (List.nth_exn sel_onehot i) <== ((host_in.address <=:. info.addr_end) &: (host_in.address >=:. info.addr_base));
-        
-        let selected = sel ==:. i in
-
-        ins.writedata <== host_in.writedata;
-        ins.address <== sel_bottom (host_in.address -:. info.addr_base) Agent.addr_len;
-        ins.write <== (host_in.write &: selected);
-        ins.read <== (host_in.read &: selected);
-      );
-
-      let slaves_readdata = List.map sorted ~f:(fun info -> let module I = (val info.inst) in (I.Agent.outputs I.this).readdata) in
-      let slaves_waitrequest = List.map sorted ~f:(fun info -> let module I = (val info.inst) in (I.Agent.outputs I.this).waitrequest) in
-
-      host_out.waitrequest <== mux sel slaves_waitrequest;
-      host_out.readdata <== mux sel_d slaves_readdata 
-
   end
+
+  type t = 
+    { host : (module Agent.Inst)
+    ; mutable agents : AgentInfo.t list
+    }
+
+  let create host = 
+    { host
+    ; agents = []
+    }
+
+  let add_agent t agent addr_base addr_end =
+    t.agents <- {AgentInfo.inst = agent; addr_base; addr_end} :: t.agents
+
+  let complete_comb t spec = 
+    let open Signal in
+
+    let module HostInst = (val t.host) in
+    let module HostAgent = HostInst.Agent in
+
+    let agent_cnt = List.length t.agents in
+    let sorted = List.sort t.agents ~compare:(fun x y -> Int.compare x.addr_base y.addr_base) in
+
+    let sel_onehot = List.init agent_cnt ~f:(fun _ -> wire 1) in
+    let sel = onehot_to_binary (concat_lsb sel_onehot) in
+    let sel_d = reg spec sel in
+
+    let host = HostInst.this in
+    let host_in, host_out = HostAgent.if_of_t host in
+
+    List.iteri sorted ~f:(fun i info ->
+      let module Inst = (val info.inst) in
+      let module Agent = Inst.Agent in
+
+      let ins, _ = Agent.if_of_t Inst.this in
+
+      let selected = (host_in.address <=:. info.addr_end) &: (host_in.address >=:. info.addr_base) in
+      (List.nth_exn sel_onehot i) <== selected;
+
+      ins.writedata <== host_in.writedata;
+      ins.address <== sel_bottom (host_in.address -:. info.addr_base) Agent.addr_len;
+      ins.write <== (host_in.write &: selected);
+      ins.read <== (host_in.read &: selected);
+    );
+
+    let slaves_readdata = List.map sorted ~f:(fun info -> let module I = (val info.inst) in (snd (I.Agent.if_of_t I.this)).readdata) in
+    let slaves_waitrequest = List.map sorted ~f:(fun info -> let module I = (val info.inst) in (snd (I.Agent.if_of_t I.this)).waitrequest) in
+
+    if List.length t.agents = 1 then (
+      host_out.waitrequest <== List.hd_exn slaves_waitrequest;
+      host_out.readdata <== List.hd_exn slaves_readdata
+    ) else (
+      host_out.waitrequest <== mux sel slaves_waitrequest;
+      host_out.readdata <== mux sel_d slaves_readdata
+    )
+
 end

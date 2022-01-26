@@ -1,0 +1,64 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Wed Jan 26 18:29:30 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/balancer.gtkw"
+[timestart] 0
+[size] 1920 1023
+[pos] -1 -1
+*-6.000000 38 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 361
+[signals_width] 334
+[sst_expanded] 1
+[sst_vpaned_height] 290
+@28
+inputs.clock
+@200
+-
+@22
+[color] 1
+inputs.ip_rx_hdr_dst_ip[31:0]
+[color] 1
+inputs.ip_rx_hdr_src_ip[31:0]
+@28
+[color] 1
+inputs.ip_rx_hdr_valid
+[color] 1
+outputs.ip_rx_hdr_ready
+@22
+inputs.ip_rx_flow_data[31:0]
+@28
+inputs.ip_rx_flow_last
+inputs.ip_rx_flow_valid
+outputs.ip_rx_flow_ready
+@200
+-
+@22
+[color] 1
+outputs.ip_tx_hdr_dst_ip[31:0]
+[color] 1
+outputs.ip_tx_hdr_src_ip[31:0]
+@28
+[color] 1
+outputs.ip_tx_hdr_valid
+[color] 1
+inputs.ip_tx_hdr_ready
+@22
+outputs.ip_tx_flow_data[31:0]
+@28
+outputs.ip_tx_flow_last
+outputs.ip_tx_flow_valid
+inputs.ip_tx_flow_ready
+@200
+-
+@28
+inputs.bus_address[2:0]
+inputs.bus_write
+@22
+inputs.bus_writedata[31:0]
+outputs.bus_readdata[31:0]
+@28
+outputs.bus_waitrequest
+[pattern_trace] 1
+[pattern_trace] 0
