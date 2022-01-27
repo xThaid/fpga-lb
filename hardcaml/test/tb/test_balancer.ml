@@ -21,7 +21,7 @@ let%expect_test "balancer" =
   let module Consumer = FlowWithHeaderConsumer(Common.IPv4Header) in
   let module BusHost = BusHost(Balancer.BusAgent) in
   
-  let sim = Sim.create ~name:"balancer" ~gtkwave:true ~trace:false () in
+  let sim = Sim.create ~name:"balancer" ~gtkwave:false ~trace:false () in
 
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
@@ -47,20 +47,49 @@ let%expect_test "balancer" =
     BusHost.schedule_write bus 1 idx
   in
 
+  let write_hash_ring vip_idx slot real_idx = 
+    BusHost.schedule_write bus 3 real_idx;
+    BusHost.schedule_write bus 2 ((vip_idx * Balancer.Consts.ring_size) + slot);
+  in
+
+  let write_real_info real_idx real_ip =
+    BusHost.schedule_write bus 5 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 real_ip));
+    BusHost.schedule_write bus 4 real_idx;
+  in
+
   Sim.cycle_n sim 1;
 
   write_vip_map "12121212" 2;
   write_vip_map "14141414" 4;
   write_vip_map "16161616" 5;
 
+  for i = 0 to 3 do
+    write_hash_ring 5 i (i + 20);
+    write_hash_ring 5 (i + 4) (i + 20)
+  done;
+
+  write_real_info 0 "efefefef";
+
+  write_real_info 20 "beef0001";
+  write_real_info 21 "beef0002";
+  write_real_info 22 "beef0003";
+  write_real_info 23 "beef0004";
+
+  Sim.cycle_n sim 40;
+
   udp_pkt "01010101" "11111111" "aaaa" "b0b0" 30;
   udp_pkt "02020202" "12121212" "bbbb" "d0d0" 15;
   udp_pkt "03030303" "13131313" "cccc" "c0c0" 32;
   udp_pkt "04040404" "14141414" "dddd" "e0e0" 14;
   udp_pkt "05050505" "15151515" "eeee" "d0d0" 13;
+
   udp_pkt "06060606" "16161616" "ffff" "f0f0" 41;
   udp_pkt "06060606" "16161616" "ffff" "f0f0" 41;
   udp_pkt "06060606" "16161616" "ffff" "f0f0" 41;
+  udp_pkt "06060607" "16161616" "ffff" "f0f0" 12;
+  udp_pkt "06060606" "16161616" "fff0" "f0f0" 12;
+  udp_pkt "06060606" "16161616" "ffff" "f0fb" 12;
+  udp_pkt "abababab" "16161616" "bebe" "efef" 12;
 
   emitter.enabled <- true;
   consumer.enabled <- true;
@@ -92,4 +121,72 @@ let%expect_test "balancer" =
   Consumer.expect_transfers consumer;
 
   [%expect {|
-    (consumed ()) |}]
+    (consumed
+     (((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003f)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 56bc) (src_ip 10101010) (dst_ip efefefef))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003e)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 56bd) (src_ip 10101010) (dst_ip efefefef))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 0059)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 778f) (src_ip 10101010) (dst_ip beef0003))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 0059)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 778f) (src_ip 10101010) (dst_ip beef0003))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 0059)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 778f) (src_ip 10101010) (dst_ip beef0003))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003c)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 77ae) (src_ip 10101010) (dst_ip beef0001))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003c)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 77ad) (src_ip 10101010) (dst_ip beef0002))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003c)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 77ab) (src_ip 10101010) (dst_ip beef0004))
+      ((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003c)
+       (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)
+       (protocol 04) (hdr_checksum 77ae) (src_ip 10101010) (dst_ip beef0001))))
+    4500002b 00000000 ff11939a 02020202
+    12121212 bbbbd0d0 00170000 00010203
+    04050607 08090a0b 0c0d0e
+
+    4500002a 00000000 ff118b93 04040404
+    14141414 dddde0e0 00160000 00010203
+    04050607 08090a0b 0c0d
+
+    45000045 00000000 ff118370 06060606
+    16161616 fffff0f0 00310000 00010203
+    04050607 08090a0b 0c0d0e0f 10111213
+    14151617 18191a1b 1c1d1e1f 20212223
+    24252627 28
+
+    45000045 00000000 ff118370 06060606
+    16161616 fffff0f0 00310000 00010203
+    04050607 08090a0b 0c0d0e0f 10111213
+    14151617 18191a1b 1c1d1e1f 20212223
+    24252627 28
+
+    45000045 00000000 ff118370 06060606
+    16161616 fffff0f0 00310000 00010203
+    04050607 08090a0b 0c0d0e0f 10111213
+    14151617 18191a1b 1c1d1e1f 20212223
+    24252627 28
+
+    45000028 00000000 ff11838c 06060607
+    16161616 fffff0f0 00140000 00010203
+    04050607 08090a0b
+
+    45000028 00000000 ff11838d 06060606
+    16161616 fff0f0f0 00140000 00010203
+    04050607 08090a0b
+
+    45000028 00000000 ff11838d 06060606
+    16161616 fffff0fb 00140000 00010203
+    04050607 08090a0b
+
+    45000028 00000000 ff113842 abababab
+    16161616 bebeefef 00140000 00010203
+    04050607 08090a0b |}]

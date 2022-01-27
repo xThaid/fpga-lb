@@ -1,6 +1,37 @@
 open Base
 open Hardcaml
 
+module type S = sig
+  module D : Interface.S
+
+  module Src : sig
+    type 'a t =
+      { valid : 'a
+      ; data : 'a D.t
+      }
+  [@@deriving sexp_of, hardcaml]
+  end
+
+  module Dst : sig
+    type 'a t =
+      { ready : 'a
+      }
+    [@@deriving sexp_of, hardcaml]
+  end
+
+  type t
+  type data_type
+
+  val create_wires : unit -> t
+  val create : valid:Signal.t -> data:data_type -> t
+
+  val valid : t -> Signal.t
+  val data : t -> data_type
+  val ready : t -> Signal.t
+
+  val fork : t -> t * t
+end
+
 module Make (Data : Interface.S) = struct
   module D = Data
 
@@ -23,6 +54,8 @@ module Make (Data : Interface.S) = struct
     { s : Signal.t Src.t 
     ; d : Signal.t Dst.t
     }
+
+  type data_type = Signal.t D.t
 
   let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
 
@@ -139,14 +172,14 @@ module Make (Data : Interface.S) = struct
 
 end
 
-module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
-  module TstFst = Make(DataFst)
-  module TstSnd = Make(DataSnd)
+module Of_pair (FstData : Interface.S) (SndData : Interface.S) = struct
+  module Fst = Make(FstData)
+  module Snd = Make(SndData)
 
   module Data = struct
     type 'a t =
-      { fst : 'a DataFst.t
-      ; snd : 'a DataSnd.t
+      { fst : 'a FstData.t
+      ; snd : 'a SndData.t
       }
     [@@deriving sexp_of, hardcaml]
 
@@ -155,50 +188,102 @@ module Of_pair (DataFst : Interface.S) (DataSnd : Interface.S) = struct
 
   include Make(Data)
   
-  let join_comb (fst : TstFst.t) (snd : TstSnd.t) =
+  let join_comb (fst : Fst.t) (snd : Snd.t) =
     let open Signal in
 
-    let res = create ~valid:((TstFst.valid fst) &: (TstSnd.valid snd)) ~data:{Data.fst = (TstFst.data fst); snd = (TstSnd.data snd)} in
+    let res = create ~valid:((Fst.valid fst) &: (Snd.valid snd)) ~data:{Data.fst = (Fst.data fst); snd = (Snd.data snd)} in
 
-    assign (TstFst.ready fst) ((TstSnd.valid snd) &: ready res);
-    assign (TstSnd.ready snd) ((TstFst.valid fst) &: ready res);
+    assign (Fst.ready fst) ((Snd.valid snd) &: ready res);
+    assign (Snd.ready snd) ((Fst.valid fst) &: ready res);
 
     res
 
   let split_comb (tst : t) =
     let open Signal in
 
-    let fst = TstFst.create_wires () in
-    let snd = TstSnd.create_wires () in
+    let fst = Fst.create_wires () in
+    let snd = Snd.create_wires () in
 
-    assign (TstFst.valid fst) (valid tst &: TstSnd.ready snd);    
-    assign (TstSnd.valid snd) (valid tst &: TstFst.ready fst);
-    assign (ready tst) ((TstFst.ready fst) &: (TstSnd.ready snd));
+    assign (Fst.valid fst) (valid tst &: Snd.ready snd);    
+    assign (Snd.valid snd) (valid tst &: Fst.ready fst);
+    assign (ready tst) ((Fst.ready fst) &: (Snd.ready snd));
 
     let data = data tst in
-    TstFst.D.Of_signal.assign (TstFst.data fst) data.fst;
-    TstSnd.D.Of_signal.assign (TstSnd.data snd) data.snd;
+    Fst.D.Of_signal.assign (Fst.data fst) data.fst;
+    Snd.D.Of_signal.assign (Snd.data snd) data.snd;
 
     fst, snd
 
   let fst tst =
     let t1, t2 = split_comb tst in
-    Signal.assign t2.d.ready Signal.vdd;
+    Signal.assign (Snd.ready t2) Signal.vdd;
     t1
 
   let snd tst =
     let t1, t2 = split_comb tst in
-    Signal.assign t1.d.ready Signal.vdd;
+    Signal.assign (Fst.ready t1) Signal.vdd;
     t2
 
 end
 
-module Mapper (From : Interface.S) (To : Interface.S) = struct
-  module FromTst = Make(From)
-  module ToTst = Make(To)
+let map (type from_t) (type to_t) (type from_dt) (type to_dt)
+      (module From : S with type t = from_t and type data_type = from_dt)
+      (module To : S with type t = to_t and type data_type = to_dt)
+      tst
+      ~f =
+  let out = To.create ~valid:(From.valid tst) ~data:(f (From.data tst)) in
+  Signal.assign (From.ready tst) (To.ready out);
+  out
 
-  let map (tst : FromTst.t) ~f =
-    let out = ToTst.create ~valid:tst.s.valid ~data:(f tst.s.data) in
-    Signal.assign tst.d.ready out.d.ready;
-    out
-end
+let map2 (type from1_t) (type from2_t) (type to_t) (type from1_dt) (type from2_dt) (type to_dt)
+      (module From1 : S with type t = from1_t and type data_type = from1_dt)
+      (module From2 : S with type t = from2_t and type data_type = from2_dt)
+      (module To : S with type t = to_t and type data_type = to_dt)
+      (t1 : from1_t)
+      (t2 : from2_t)
+      ~f =
+  let open Signal in
+  let out = To.create ~valid:((From1.valid t1) &: (From2.valid t2)) ~data:(f (From1.data t1) (From2.data t2)) in
+  assign (From1.ready t1) ((From2.valid t2) &: (To.ready out));
+  assign (From2.ready t2) ((From1.valid t1) &: (To.ready out));
+  out
+
+let map3 (type from1_t) (type from2_t) (type from3_t) (type to_t) (type from1_dt) (type from2_dt) (type from3_dt) (type to_dt)
+      (module From1 : S with type t = from1_t and type data_type = from1_dt)
+      (module From2 : S with type t = from2_t and type data_type = from2_dt)
+      (module From3 : S with type t = from3_t and type data_type = from3_dt)
+      (module To : S with type t = to_t and type data_type = to_dt)
+      (t1 : from1_t)
+      (t2 : from2_t)
+      (t3 : from3_t)
+      ~f =
+  let open Signal in
+  let out = To.create ~valid:((From1.valid t1) &: (From2.valid t2) &: (From3.valid t3)) ~data:(f (From1.data t1) (From2.data t2) (From3.data t3)) in
+  assign (From1.ready t1) ((From2.valid t2) &: (From3.valid t3) &: (To.ready out));
+  assign (From2.ready t2) ((From1.valid t1) &: (From3.valid t3) &: (To.ready out));
+  assign (From3.ready t3) ((From1.valid t1) &: (From2.valid t2) &: (To.ready out));
+  out
+
+let fork_map (type from_t) (type to_t) (type from_dt) (type to_dt)
+      (module From : S with type t = from_t and type data_type = from_dt)
+      (module To : S with type t = to_t and type data_type = to_dt)
+      tst
+      ~f = 
+  let tst1, tst2 = From.fork tst in
+  tst1, map (module From) (module To) tst2 ~f
+  
+let filter_map2 (type from1_t) (type from2_t) (type to_t) (type from1_dt) (type from2_dt) (type to_dt)
+      (module From1 : S with type t = from1_t and type data_type = from1_dt)
+      (module From2 : S with type t = from2_t and type data_type = from2_dt)
+      (module To : S with type t = to_t and type data_type = to_dt)
+      (t1 : from1_t)
+      (t2 : from2_t)
+      ~f =
+  let open Signal in
+
+  let new_data, filter = f (From1.data t1) (From2.data t2) in
+
+  let out = To.create ~valid:((From1.valid t1) &: (From2.valid t2) &: filter) ~data:new_data in
+  assign (From1.ready t1) ((From2.valid t2) &: (To.ready out));
+  assign (From2.ready t2) ((From1.valid t1) &: (To.ready out));
+  out

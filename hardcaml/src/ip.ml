@@ -36,10 +36,10 @@ let calc_checksum (type a) (module B : Comb.S with type t = a) ipv4_hdr =
 let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) =
   let open Signal in
 
-  let ip_hdr, ip_hdr2 = IPv4_hdr.fork ip_rx.hdr in
-
-  let module Mapper = Transaction.Mapper(Common.IPv4Header)(Arp.Table.Key) in
-  Arp.Table.QueryPort.Request.connect arp_query.req (Mapper.map ip_hdr2 ~f:(fun hdr -> {Arp.Table.Key.ip = hdr.dst_ip}));
+  let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.QueryPort.Request) ip_rx.hdr
+    ~f:(fun hdr -> {Arp.Table.Key.ip = hdr.dst_ip})
+  in
+  Arp.Table.QueryPort.Request.connect arp_query.req arp_query_req;
 
   let ip_flow = 
     Flow.Base.pipe_source spec ip_rx.flow |>
@@ -55,28 +55,24 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) =
   let module WithArpResp = Transaction.Of_pair(Arp.Table.QueryPort.ResponseData)(Common.IPv4Header) in
   let module WithArpRespFlow = Flow.With_header(WithArpResp.Data) in
 
-  let with_arp_resp = 
+  let flow_with_arp_resp = 
     WithArpRespFlow.create (WithArpResp.join_comb arp_query.resp ip_hdr) ip_flow |> 
     WithArpRespFlow.filter spec ~f:(fun hdr -> hdr.fst.found)
   in
 
-  let with_arp_resp1, with_arp_resp2 = WithArpResp.fork with_arp_resp.hdr in
-
-  let ip_tx = IPv4_flow.create (WithArpResp.snd with_arp_resp1) with_arp_resp.flow in
-
-  let module Mapper = Transaction.Mapper(WithArpResp.Data)(Common.EthernetHeader) in
-  let eth_hdr = 
-    Mapper.map with_arp_resp2 ~f:(fun data ->
+  let with_arp_resp, eth_hdr = 
+    Transaction.fork_map (module WithArpResp) (module Eth_hdr) flow_with_arp_resp.hdr ~f:(fun data ->
       { Common.EthernetHeader.dest_mac = data.fst.data.mac
       ; src_mac = of_hex ~width:48 "aabbccddeeff"
       ; ether_type = of_int ~width:16 0x0800
       }
-    ) |>
-    Eth_hdr.bufferize spec
+    )
   in
 
+  let ip_tx = IPv4_flow.create (WithArpResp.snd with_arp_resp) flow_with_arp_resp.flow in
+
   let flow_out = IPv4_flow.to_flow spec ip_tx in
-  Eth_flow.create eth_hdr flow_out
+  Eth_flow.create (Eth_hdr.bufferize spec eth_hdr) flow_out
 
 let create
       (_scope : Scope.t)

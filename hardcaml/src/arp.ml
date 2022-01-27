@@ -1,4 +1,3 @@
-open Base
 open Hardcaml
 
 module Eth_flow = Flow.With_header(Common.EthernetHeader)
@@ -20,7 +19,7 @@ module Table = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  include Hash_table.Make(Key)(Data)
+  include Container.Hashtbl(Key)(Data)
 end
 
 module Config = struct
@@ -28,7 +27,7 @@ module Config = struct
   let mac_addr = "aabbccddeeff"
   let mac_addr_bytes = Signal.of_hex ~width:48 mac_addr
   let ip_addr = [10;100;0;1]
-  let ip_addr_bytes = List.map ip_addr ~f:(Signal.of_int ~width:8) |> Signal.concat_msb
+  let ip_addr_bytes = Base.List.map ip_addr ~f:(Signal.of_int ~width:8) |> Signal.concat_msb
 end
 
 module I = struct
