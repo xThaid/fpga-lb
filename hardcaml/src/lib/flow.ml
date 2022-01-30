@@ -362,7 +362,7 @@ module Serializer (Data : Interface.S) = struct
 
     Base.t_of_if flow_src flow_dst
 
-  let deserialize spec (flow : Base.t) =
+  let deserialize spec ?(ready_ahead = false) (flow : Base.t) =
     let open Signal in
 
     if Tst.data_len <= Base.word_width then raise_s [%message "transaction data with length <= word width is not supported"];
@@ -379,6 +379,11 @@ module Serializer (Data : Interface.S) = struct
     let append_data_buf () = Always.(data_buf <-- ((sll data_buf.value Base.word_width) |: (uresize flow.s.data.data data_buf_width))) in
 
     let ready_next = Always.Variable.wire ~default:vdd in
+
+    flow.d.ready <== (if ready_ahead then ready_next.value else reg spec ready_next.value);
+
+    let flow = Base.t_of_if flow.s (Base.Dst.Of_signal.wires ()) in
+    flow.d.ready <== reg spec ready_next.value;
 
     let module SM = struct
       type t =
@@ -447,8 +452,6 @@ module Serializer (Data : Interface.S) = struct
       ]
     ];
     ]);
-
-    flow.d.ready <== (reg spec ready_next.value);
 
     assign (Tst.valid tst) tst_valid.value;
     Data.Of_signal.assign (Tst.data tst) (Data.Of_signal.unpack ~rev:true (sel_top data_buf.value Tst.data_len));
@@ -678,13 +681,12 @@ module With_header (Data : Interface.S) = struct
   let from_flow spec (flow : Base.t) =
     let module Serializer = Serializer(Data) in
     let f1, f2 = Base.split spec ~hdr_length:Header.data_len ~source:flow in
-    let hdr = Serializer.deserialize spec f1 in
-    fst (barrier spec (create hdr f2)) (* TODO: remove the barrier? *)
+    let hdr = Serializer.deserialize spec ~ready_ahead:true f1 in
+    create hdr f2
 
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
-    let hdr = Header.apply_names ~prefix:"data_" flow.hdr in
-    let f1 = Serializer.serialize spec hdr in
+    let f1 = Serializer.serialize spec flow.hdr in
     Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow
 
   let arbitrate spec sources =

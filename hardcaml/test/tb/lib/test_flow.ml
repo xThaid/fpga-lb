@@ -586,7 +586,7 @@ let%expect_test "packetizer_full_unaligned" =
   Sim.cycle_n sim 5;
   consumer.enabled <- true;
 
-  Sim.cycle_n sim 20;
+  Sim.cycle_n sim 25;
 
   FlowConsumer.expect_data consumer;
 
