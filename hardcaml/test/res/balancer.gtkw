@@ -1,13 +1,13 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Sun Jan 30 13:20:27 2022
+[*] Sun Jan 30 18:36:43 2022
 [*]
 [dumpfile] "(null)"
 [savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/balancer.gtkw"
 [timestart] 0
 [size] 1920 1023
 [pos] -1 -1
-*-6.000000 37 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-6.000000 46 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 361
 [signals_width] 334
 [sst_expanded] 1
@@ -52,7 +52,7 @@ outputs.ip_tx_flow_valid
 inputs.ip_tx_flow_ready
 @200
 -
-@23
+@22
 inputs.bus_address[2:0]
 @28
 inputs.bus_write
@@ -61,5 +61,16 @@ inputs.bus_writedata[31:0]
 outputs.bus_readdata[31:0]
 @28
 outputs.bus_waitrequest
+@200
+-
+@28
+various.hdr_in_ready
+various.hdr_in_valid
+various.query_resp1_ready
+various.query_resp1_valid
+various.query_resp2_ready
+various.query_resp2_valid
+various.query_resp_ready
+various.query_resp_valid
 [pattern_trace] 1
 [pattern_trace] 0

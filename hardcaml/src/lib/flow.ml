@@ -633,7 +633,7 @@ module With_header (Data : Interface.S) = struct
       [@@deriving sexp_of, compare, enumerate]
     end in
 
-    let sm = Always.State_machine.create (module SM) ~enable:vdd spec in
+    let sm = Always.State_machine.create (module SM) spec in
 
     Always.(compile [
     sm.switch [
@@ -765,7 +765,7 @@ module With_header (Data : Interface.S) = struct
   let filter spec source ~f = 
     let open Signal in
 
-    let synchronized, status = barrier spec source in
+    let synchronized, status = header_barrier spec source in
     let filtered = f (Header.data synchronized.hdr) in
 
     let source_src, source_dst = if_of_t synchronized in
@@ -777,11 +777,11 @@ module With_header (Data : Interface.S) = struct
     Always.(compile [
       if_ busy.value [
         forward <-- forward_reg.value;
-        when_ status.last_fired [
+        when_ status.flow_end [
           busy <--. 0;
         ]
       ] [
-        when_ status.valid [
+        when_ status.hdr_valid [
           forward <-- filtered;
           forward_reg <-- filtered;
           busy <--. 1;

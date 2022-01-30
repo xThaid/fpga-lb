@@ -3,7 +3,7 @@ open Hardcaml
 module Eth_flow = Flow.With_header(Common.EthernetHeader)
 module IPv4_flow = Flow.With_header(Common.IPv4Header)
 
-module BusAgent = Bus.Agent.Make(struct let addr_len = 4 end)
+module BusAgent = Bus.Agent.Make(struct let addr_len = 8 end)
 
 module I = struct
   type 'a t =
@@ -57,7 +57,7 @@ let create
   Flow.Base.connect tx (Eth_flow.to_flow spec tx_eth);
 
   let bus_interconnect = Bus.Interconnect.create (Bus.Agent.build (module BusAgent) bus) in
-  Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Balancer.BusAgent) balancer_bus) 0 0;
+  Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Balancer.BusAgent) balancer_bus) 64 69;
   Bus.Interconnect.complete_comb bus_interconnect spec
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) =

@@ -1,17 +1,17 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Wed Jan 26 18:28:57 2022
+[*] Sun Jan 30 17:57:24 2022
 [*]
 [dumpfile] "(null)"
 [savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/dataplane.gtkw"
-[timestart] 0
+[timestart] 1974
 [size] 1920 1023
 [pos] -1 -1
-*-7.000000 79 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-6.000000 2166 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 407
 [signals_width] 380
 [sst_expanded] 1
-[sst_vpaned_height] 244
+[sst_vpaned_height] 183
 @28
 inputs.clock
 @200
@@ -26,18 +26,22 @@ outputs.rx_ready
 @200
 -
 @22
+[color] 1
 outputs.tx_data[31:0]
 @28
+[color] 1
 outputs.tx_empty[1:0]
+[color] 1
 outputs.tx_endofpacket
+[color] 1
 outputs.tx_startofpacket
+[color] 1
 outputs.tx_valid
+[color] 1
 inputs.tx_ready
 @200
 -
 -
-@22
-inputs.bus_address[3:0]
 @28
 inputs.bus_write
 @22
@@ -47,7 +51,43 @@ outputs.bus_readdata[31:0]
 outputs.bus_waitrequest
 @200
 -
+@28
+various.ip_outhdr_valid
+various.ip_outhdr_ready
+@22
+various.ip_outhdr_src_mac[47:0]
+various.ip_outhdr_dest_mac[47:0]
+various.ip_outflow_data[31:0]
+@28
+various.ip_outflow_last
+various.ip_outflow_ready
+various.ip_outflow_valid
+@200
 -
+@28
+various.with_arp_resp_hdr_valid
+various.with_arp_resp_hdr_ready
+various.with_arp_resp_hdr_found
+@22
+various.with_arp_resp_hdr_mac[47:0]
+various.with_arp_resp_hdr_src_ip[31:0]
+various.with_arp_resp_hdr_dst_ip[31:0]
+@28
+various.with_arp_resp_flow_valid
+various.with_arp_resp_flow_ready
+@22
+various.with_arp_resp_flow_data[31:0]
+@28
+various.with_arp_resp_flow_last
+@200
 -
+@28
+various.with_arp_filt_hdr_valid
+various.with_arp_filt_hdr_ready
+various.with_arp_filt_flow_valid
+@29
+various.with_arp_filt_flow_ready
+@22
+various.with_arp_filt_flow_data[31:0]
 [pattern_trace] 1
 [pattern_trace] 0

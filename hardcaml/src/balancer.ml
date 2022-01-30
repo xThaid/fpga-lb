@@ -166,11 +166,12 @@ let create
       ~(ip_rx : IPv4_flow.t) =
 
   let ip_rx, to_encap_ip_rx = IPv4_flow.fork ip_rx in
-  let encap_flow =
-    IPv4_flow.to_flow spec to_encap_ip_rx |>
-    Flow.Base.pipe_source spec |>
-    Flow.Base.pipe_source spec 
+  let to_encap_ip_flow =
+    Flow.Base.pipe_source spec to_encap_ip_rx.flow |>
+    Flow.Base.pipe_source spec
   in
+
+  let encap_flow = IPv4_flow.to_flow spec (IPv4_flow.create to_encap_ip_rx.hdr to_encap_ip_flow) in
 
   let module L4Serializer = Flow.Serializer(L4_hdr_data) in
   let l4_hdr = L4Serializer.deserialize spec ip_rx.flow in
@@ -282,7 +283,9 @@ let create
 
   Bus.Interconnect.complete_comb bus_interconnect spec;
   
-  (IPv4_flow.create outer_ip_hdr encap_flow), bus_host
+  let ip_tx = IPv4_flow.create outer_ip_hdr encap_flow in
+
+  ip_tx, bus_host
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in

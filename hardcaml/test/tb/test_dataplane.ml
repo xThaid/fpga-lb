@@ -17,42 +17,117 @@ let%expect_test "dataplane" =
   let module Sim = Sim.Sim(DataplaneSim) in
   let module Emitter = AvalonFlowEmitter in
   let module Consumer = AvalonFlowConsumer in
+  let module BusHost = BusHost(Dataplane.BusAgent) in
   
   let sim = Sim.create ~name:"dataplane" ~gtkwave:false ~trace:false () in
 
   let inputs = Sim.inputs sim in
   let outputs = Sim.outputs sim in
 
+  let bus = BusHost.create outputs.bus inputs.bus in
   let emitter = Emitter.create inputs.rx outputs.rx in
   let consumer = Consumer.create outputs.tx inputs.tx in
 
+  Sim.add_element sim (module BusHost) bus;
   Sim.add_element sim (module Emitter) emitter;
   Sim.add_element sim (module Consumer) consumer;
 
-  Emitter.add_transfer emitter (Packet.create_arp_req "112233445566" "99999999" "0a640001");
-  Emitter.add_transfer emitter (Packet.create_arp_req "aaaaaaaaaaaa" "88888888" "0a640001");
-  Emitter.add_transfer emitter (Packet.create_arp_req "bbbbbbbbbbbb" "77777777" "0a640001");
+  let arp_req sha spa tpa = Emitter.add_transfer emitter (Packet.create_arp_req sha spa tpa) in
+  let arp_resp src_mac spa = Emitter.add_transfer emitter (Packet.create_arp_resp src_mac spa) in
 
-  Emitter.add_transfer emitter (Packet.create_icmp_echo_req "121234345656" "cccccccccccc" "0a640009" "0a0b0c0d" "bacd" "9876");
-  Emitter.add_transfer emitter (Packet.create_arp_resp "a0b0c0d0e0f0" "ff00ff00ff");
-  Emitter.add_transfer emitter (Packet.create_arp_resp "fafafafafafa" "0a0b0c0d");
+  let udp_pkt src_mac dst_mac src_ip dst_ip src_port dst_port payload_len = 
+    let payload = (List.init payload_len ~f:(fun i -> Char.of_int_exn i)) in
+    let udp = Packet.create_udp_hdr src_port dst_port (8 + payload_len) in
+    let ip = Packet.create_ipv4_hdr (20 + 8 + payload_len) "11" src_ip dst_ip in
+    let eth = Packet.create_eth_hdr src_mac dst_mac "0800" in
   
-  (*
-  Emitter.add_transfer emitter (Packet.create_icmp_echo_req "121234345656" "cccccccccccc" "0a640009" "0a0b0c0d" "bacd" "9876");
+    let data = Packet.serialize_eth_hdr eth @ Packet.serialize_ipv4_hdr ip @ Packet.serialize_udp_hdr udp @ payload in
+    Emitter.add_transfer emitter (Bytes.of_char_list data)
+  in
 
-  for _ = 1 to 16 do
-    Emitter.add_transfer emitter (Packet.create_icmp_echo_req "ffffffffffff" "dddddddddddd" "0a640008" "0a0b0c0d" "b003" "0001")
-  done;
-  *)
+  let write_vip_map ip idx =
+    BusHost.schedule_write bus 64 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 ip));
+    BusHost.schedule_write bus 65 idx
+  in
 
+  let write_hash_ring vip_idx slot real_idx = 
+    BusHost.schedule_write bus 67 real_idx;
+    BusHost.schedule_write bus 66 ((vip_idx * Balancer.Consts.ring_size) + slot);
+  in
+
+  let write_real_info real_idx real_ip =
+    BusHost.schedule_write bus 69 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 real_ip));
+    BusHost.schedule_write bus 68 real_idx;
+  in
+  
   Sim.cycle_n sim 2;
 
   emitter.enabled <- true;
   consumer.enabled <- true;
 
-  Sim.cycle_n sim 400;
+  write_vip_map "88008800" 2;
+  write_vip_map "99009900" 3;
+
+  for i = 0 to 1 do
+    write_hash_ring 2 (i + 0) (i + 10);
+    write_hash_ring 2 (i + 2) (i + 10);
+    write_hash_ring 2 (i + 4) (i + 10);
+    write_hash_ring 2 (i + 6) (i + 10);
+  done;
+
+  for i = 0 to 3 do
+    write_hash_ring 3 (i + 0) (i + 20);
+    write_hash_ring 3 (i + 4) (i + 20)
+  done;
+
+  write_real_info 0 "efefefef";
+
+  write_real_info 10 "face0001";
+  write_real_info 11 "face0002";
+
+  write_real_info 20 "beef0001";
+  write_real_info 21 "beef0002";
+  write_real_info 22 "beef0003";
+  write_real_info 23 "beef0004";
+
+  arp_req "112233445566" "99999999" "0a640001";
+  arp_req "aaaaaaaaaaaa" "88888888" "0a640001";
+  arp_req "bbbbbbbbbbbb" "77777777" "0a640001";
+  
+  Sim.cycle_n sim 100;
+
+  udp_pkt "202020202020" "303030303030" "dead0000" "01010101" "ff00" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0000" "88008800" "ff00" "0050" 16;
+
+  Sim.cycle_n sim 40;
+
+  arp_resp "bee0face0001" "face0001";
+  arp_resp "bee0face0002" "face0002";
+
+  Sim.cycle_n sim 50;
+  
+  udp_pkt "202020202020" "303030303030" "dead0000" "88008800" "ff00" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0001" "88008800" "ff02" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0002" "88008800" "ff03" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0002" "88008801" "ff03" "0050" 16;
+
+  udp_pkt "202020202020" "303030303030" "dead0000" "99009900" "ff03" "0050" 16;
+
+  Sim.cycle_n sim 200;
+
+  arp_resp "bee0beef0001" "beef0001";
+  arp_resp "bee0beef0002" "beef0002";
+  arp_resp "bee0beef0003" "beef0003";
+  arp_resp "bee0beef0004" "beef0004";
+
+  udp_pkt "202020202020" "303030303030" "dead0000" "99009900" "ff03" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0000" "99009900" "ff03" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0005" "99009900" "fff0" "0050" 16;
+  udp_pkt "202020202020" "303030303030" "dead0005" "99009900" "fff0" "0050" 16;
+
+  Sim.cycle_n sim 200;
 
   Consumer.expect_data_digest consumer;
 
   [%expect {|
-    (digest 5344f1ac7a2e01598e71e21b3df39962) |}]
+    (digest 26653faf6a26e3dc4d051f96fcd2cc82) |}]
