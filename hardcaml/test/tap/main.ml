@@ -31,6 +31,7 @@ let () =
   let module Sim = Sim.Sim(DataplaneSim) in
   let module Emitter = AvalonFlowEmitter in
   let module Consumer = AvalonFlowConsumer in
+  let module BusHost = BusHost(Dataplane.BusAgent) in
 
   let sim = Sim.create ~name:"dataplane" ~gtkwave:false ~trace:false () in
 
@@ -39,9 +40,58 @@ let () =
 
   let emitter = Emitter.create inputs.rx outputs.rx in
   let consumer = Consumer.create outputs.tx inputs.tx in
+  let bus = BusHost.create outputs.bus inputs.bus in
 
+  Sim.add_element sim (module BusHost) bus;
   Sim.add_element sim (module Emitter) emitter;
   Sim.add_element sim (module Consumer) consumer;
+
+  let write_vip_map ip idx =
+    BusHost.schedule_write bus 64 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 ip));
+    BusHost.schedule_write bus 65 idx
+  in
+
+  let write_hash_ring vip_idx slot real_idx = 
+    BusHost.schedule_write bus 67 real_idx;
+    BusHost.schedule_write bus 66 ((vip_idx * Balancer.Consts.ring_size) + slot);
+  in
+
+  let write_real_info real_idx real_ip =
+    BusHost.schedule_write bus 69 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 real_ip));
+    BusHost.schedule_write bus 68 real_idx;
+  in
+  
+  Sim.cycle_n sim 2;
+
+  emitter.enabled <- true;
+  consumer.enabled <- true;
+
+  write_vip_map "0a001001" 2;
+  write_vip_map "0a001002" 3;
+
+  for i = 0 to 1 do
+    write_hash_ring 2 (i + 0) (i + 10);
+    write_hash_ring 2 (i + 2) (i + 10);
+    write_hash_ring 2 (i + 4) (i + 10);
+    write_hash_ring 2 (i + 6) (i + 10);
+  done;
+
+  for i = 0 to 3 do
+    write_hash_ring 3 (i + 0) (i + 20);
+    write_hash_ring 3 (i + 4) (i + 20)
+  done;
+
+  write_real_info 0 "efefefef";
+
+  write_real_info 10 "face0001";
+  write_real_info 11 "face0002";
+
+  write_real_info 20 "beef0001";
+  write_real_info 21 "beef0002";
+  write_real_info 22 "beef0003";
+  write_real_info 23 "beef0004";
+
+  Sim.cycle_n sim 40;
 
   emitter.enabled <- true;
   consumer.enabled <- true;
