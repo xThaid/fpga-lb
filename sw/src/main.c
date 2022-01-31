@@ -47,7 +47,19 @@ void heartBeatTask(void *pvParameters) {
     }
 }
 
+static void dataplane_setup() {
+    dataplane_add_vip(0x0a001001, 3);
+
+    int hashring[HASH_RING_SIZE] = {10, 11, 10, 11, 10, 11, 10, 11};
+    dataplane_update_hashring(3, hashring);
+
+    dataplane_update_real(0, 0x0a640000);
+    dataplane_update_real(10, 0x0a640001);
+    dataplane_update_real(11, 0x0a640002);
+}
+
 int main(void) {
+    dataplane_setup();
     tse_setup();
 
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);

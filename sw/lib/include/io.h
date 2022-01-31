@@ -172,8 +172,29 @@ enum TSE_CTRL_enum {
     TSE_CTRL_CNT_RESET            = (1UL << 31)
 };
 
+//------------------------------------------------------------------------------
+// Dataplane
+//------------------------------------------------------------------------------
+
+typedef struct __attribute__((packed,aligned(4))) {
+    uint32_t _reserved[64];
+    struct __attribute__((packed)) {
+        uint32_t vip_map_vip;
+        uint32_t vip_map_idx;
+
+        uint32_t hash_ring_addr;
+        uint32_t hash_ring_data;
+
+        uint32_t reals_map_addr;
+        uint32_t reals_map_data;
+    } balancer;
+} dataplane_t;
+
+#define DATAPLANE (*((volatile dataplane_t*) (0x80004000UL)))
+
 #include "uart.h"
 #include "gpio.h"
 #include "tse.h"
+#include "dataplane.h"
 
 #endif
