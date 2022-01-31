@@ -60,5 +60,13 @@ public:
     void write(uint32_t addr, uint32_t data, uint8_t mask);
 };
 
+class Dataplane : public MemBusSlave {
+public:
+    Dataplane(uint32_t baseAddr, uint32_t endAddr);
+
+    uint32_t read(uint32_t addr);
+    void write(uint32_t addr, uint32_t data, uint8_t mask);
+};
+
 
 #endif

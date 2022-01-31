@@ -126,8 +126,9 @@ public:
         MTimer *mtimer = new MTimer(0x80001000, 0x8000100f);
         GPIOControl *gpioctrl = new GPIOControl(0x80002000, 0x80002003);
         TSE *tse = new TSE(0x80003000, 0x800033ff);
+        Dataplane *dataplane = new Dataplane(0x80004000, 0x800043ff);
 
-        tse->setLogAccess(1);
+        dataplane->setLogAccess(1);
 
         vex = new VexRiscv(new VVexRiscvCpu());
         ibus = new IBusCtrl();
@@ -139,6 +140,7 @@ public:
         dbus->addSlave(mtimer);
         dbus->addSlave(gpioctrl);
         dbus->addSlave(tse);
+        dbus->addSlave(dataplane);
 
         ibus->avalonRead.assign(&vex->iBusRead);
         ibus->avalonAddress.assign(&vex->iBusAddress);

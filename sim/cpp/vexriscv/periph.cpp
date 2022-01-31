@@ -165,3 +165,15 @@ uint32_t TSE::read(uint32_t addr) {
 
 void TSE::write(uint32_t addr, uint32_t data, uint8_t mask) {
 }
+
+Dataplane::Dataplane(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("Dataplane", baseAddr, endAddr)
+{
+}
+
+uint32_t Dataplane::read(uint32_t addr) {
+    return 0x00000000;
+}
+
+void Dataplane::write(uint32_t addr, uint32_t data, uint8_t mask) {
+}
