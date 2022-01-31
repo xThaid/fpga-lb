@@ -119,3 +119,39 @@ set_interface_property reset SVD_ADDRESS_GROUP ""
 
 add_interface_port reset clear reset Input 1
 
+# 
+# connection point bus_agent
+# 
+add_interface bus_agent avalon end
+set_interface_property bus_agent addressUnits WORDS
+set_interface_property bus_agent associatedClock clk
+set_interface_property bus_agent associatedReset reset
+set_interface_property bus_agent bitsPerSymbol 8
+set_interface_property bus_agent burstOnBurstBoundariesOnly false
+set_interface_property bus_agent burstcountUnits WORDS
+set_interface_property bus_agent explicitAddressSpan 0
+set_interface_property bus_agent holdTime 0
+set_interface_property bus_agent linewrapBursts false
+set_interface_property bus_agent maximumPendingReadTransactions 0
+set_interface_property bus_agent maximumPendingWriteTransactions 0
+set_interface_property bus_agent readLatency 1
+set_interface_property bus_agent readWaitTime 1
+set_interface_property bus_agent setupTime 0
+set_interface_property bus_agent timingUnits Cycles
+set_interface_property bus_agent writeWaitTime 0
+set_interface_property bus_agent ENABLED true
+set_interface_property bus_agent EXPORT_OF ""
+set_interface_property bus_agent PORT_NAME_MAP ""
+set_interface_property bus_agent CMSIS_SVD_VARIABLES ""
+set_interface_property bus_agent SVD_ADDRESS_GROUP ""
+
+add_interface_port bus_agent bus_address address Input 8
+add_interface_port bus_agent bus_read read Input 1
+add_interface_port bus_agent bus_readdata readdata Output 32
+add_interface_port bus_agent bus_waitrequest waitrequest Output 1
+add_interface_port bus_agent bus_write write Input 1
+add_interface_port bus_agent bus_writedata writedata Input 32
+set_interface_assignment bus_agent embeddedsw.configuration.isFlash 0
+set_interface_assignment bus_agent embeddedsw.configuration.isMemoryDevice 0
+set_interface_assignment bus_agent embeddedsw.configuration.isNonVolatileStorage 0
+set_interface_assignment bus_agent embeddedsw.configuration.isPrintableDevice 0

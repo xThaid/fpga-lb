@@ -17,6 +17,14 @@
          type = "int";
       }
    }
+   element dataplane.bus_agent
+   {
+      datum baseAddress
+      {
+         value = "2147500032";
+         type = "String";
+      }
+   }
    element gpio_ctrl
    {
       datum _sortIndex
@@ -224,7 +232,7 @@
   <parameter name="enable_magic_detect" value="false" />
   <parameter name="enable_ptp_1step" value="false" />
   <parameter name="enable_sgmii" value="false" />
-  <parameter name="enable_shift16" value="true" />
+  <parameter name="enable_shift16" value="false" />
   <parameter name="enable_sup_addr" value="false" />
   <parameter name="enable_timestamping" value="false" />
   <parameter name="enable_use_internal_fifo" value="true" />
@@ -313,6 +321,15 @@
    end="gpio_ctrl.avalon_slave">
   <parameter name="arbitrationPriority" value="1" />
   <parameter name="baseAddress" value="0x80002000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="vexriscv.dBusAvalon"
+   end="dataplane.bus_agent">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80004000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection
