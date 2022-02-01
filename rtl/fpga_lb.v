@@ -116,7 +116,8 @@ module fpga_lb(
     .mac_0_misc_ff_rx_a_empty (),
     .reset_reset_n            (pll_rst_locked),
     .gpio_ledr                (LEDR),
-    .gpio_ledg                (LEDG)
+    .gpio_ledg                (LEDG),
+    .gpio_seven_seg           ({HEX0, HEX1, HEX2, HEX3, HEX4, HEX5, HEX6, HEX7})
   );
 
 endmodule

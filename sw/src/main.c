@@ -8,6 +8,20 @@
 
 int fibonacci[100];
 
+void display_num(int number) {
+    int digits[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    int digit = 7;
+
+    while (number > 0 && digit >= 0) {
+        digits[digit] = number % 10;
+        digit--;
+        number /= 10;
+    }
+
+    for (int i = 0; i < 8; i++)
+        gpio_7seg_set_digit(i, digits[i]);
+}
+
 void task1 (void *pvParameters) {
     fibonacci[0] = 0;
     fibonacci[1] = 1;
@@ -33,9 +47,11 @@ void task1 (void *pvParameters) {
 }
 
 void task2 (void *pvParameters) {
-    while(1) {
+    int cnt = 0;
 
-        vTaskDelay(1000);
+    while(1) {
+        display_num(cnt++);
+        vTaskDelay(100);
     }
 }
 

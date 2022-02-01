@@ -69,6 +69,7 @@ set_interface_property avalon_slave CMSIS_SVD_VARIABLES ""
 set_interface_property avalon_slave SVD_ADDRESS_GROUP ""
 
 add_interface_port avalon_slave avalon_writedata writedata Input 32
+add_interface_port avalon_slave avalon_address address Input 4
 add_interface_port avalon_slave avalon_readdata readdata Output 32
 add_interface_port avalon_slave avalon_write write Input 1
 add_interface_port avalon_slave avalon_read read Input 1
@@ -121,3 +122,4 @@ set_interface_property gpio SVD_ADDRESS_GROUP ""
 
 add_interface_port gpio ledr ledr Output 18
 add_interface_port gpio ledg ledg Output 9
+add_interface_port gpio seven_seg seven_seg Output 56

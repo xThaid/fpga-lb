@@ -56,6 +56,7 @@ typedef struct __attribute__((packed,aligned(4))) {
 
 typedef struct __attribute__((packed,aligned(4))) {
     uint32_t LED;
+    uint32_t hex[8];
 } gpio_t;
 
 #define GPIO (*((volatile gpio_t*) (0x80002000UL)))
