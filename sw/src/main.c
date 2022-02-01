@@ -8,8 +8,8 @@
 
 int fibonacci[100];
 
-void display_num(int number) {
-    int digits[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+void display_num(uint32_t number) {
+    int digits[8] = {-1, -1, -1, -1, -1, -1, -1, 0};
     int digit = 7;
 
     while (number > 0 && digit >= 0) {
@@ -22,35 +22,10 @@ void display_num(int number) {
         gpio_7seg_set_digit(i, digits[i]);
 }
 
-void task1 (void *pvParameters) {
-    fibonacci[0] = 0;
-    fibonacci[1] = 1;
-
-    for (int i = 2; i < 100; i++) {
-        fibonacci[i] = fibonacci[i - 1] + fibonacci[i - 2];
-    }
-
-    char buf[32];
-
-    while (1) {
-        int n = jtag_uart_readline(buf, sizeof(buf));
-        for (int i = 0; i < n / 2; i++) {
-            char c = buf[i];
-            buf[i] = buf[n - i - 1];
-            buf[n - i - 1] = c;
-        }
-
-        jtag_uart_puts("Reversed: ");
-        jtag_uart_puts(buf);
-        jtag_uart_putc('\n');
-    }
-}
-
-void task2 (void *pvParameters) {
-    int cnt = 0;
-
+void stats_fetcher_task(void *pvParameters) {
     while(1) {
-        display_num(cnt++);
+        dataplane_stats_t stats = dataplane_get_stats(-1);
+        display_num(stats.pkt_cnt);
         vTaskDelay(100);
     }
 }
@@ -79,7 +54,8 @@ int main(void) {
     tse_setup();
 
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
-    xTaskCreate(task2, "Task 2", 100, NULL, 1, NULL);
+    xTaskCreate(stats_fetcher_task, "Stats fetcher task", 128, NULL, 1, NULL);
+
     vTaskStartScheduler();
 
     return 0;

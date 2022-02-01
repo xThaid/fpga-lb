@@ -98,7 +98,7 @@ let%expect_test "bus_interconnect_comb" =
   Sim.expect_trace_digest sim;
 
   [%expect {|
-    ("List.rev t.responses" (103 1000 1002 10006 10006))
+    (responses (103 1000 1002 10006 10006))
     4fbba1d862eaafed48d8769ced8fe220 |}]
 
 

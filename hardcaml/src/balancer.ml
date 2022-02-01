@@ -9,7 +9,7 @@ module Consts = struct
   let ring_size = 8
 end
 
-module BusAgent = Bus.Agent.Make(struct let addr_len = 3 end)
+module BusAgent = Bus.Agent.Make(struct let addr_len = 8 end)
 
 module I = struct
   type 'a t =
@@ -125,12 +125,13 @@ module RealLookupReq = Transaction.Make(RealLookupReqData)
 module RealLookupRespData = struct
   type 'a t =
     { real_ip : 'a [@bits 32]
+    ; real_idx : 'a [@bits Bits.address_bits_for Consts.max_reals]
     }
   [@@deriving sexp_of, hardcaml]
 end
 module RealLookupResp = Transaction.Make(RealLookupRespData)
 
-let real_lookup (req : RealLookupReq.t) =
+let real_lookup spec (req : RealLookupReq.t) =
   let hash_ring_resp = HashRings.ReadPort.Response.create_wires () in
   let hash_ring_req = Transaction.map (module RealLookupReq) (module HashRings.ReadPort.Request)
     req ~f:(fun req ->
@@ -147,15 +148,17 @@ let real_lookup (req : RealLookupReq.t) =
   let hash_ring_read = HashRings.ReadPort.create hash_ring_req hash_ring_resp in
 
   let real_map_resp = RealsMap.ReadPort.Response.create_wires () in
-  let real_map_req = Transaction.map (module HashRings.ReadPort.Response) (module RealsMap.ReadPort.Request)
+  let hash_ring_resp, real_map_req = Transaction.fork_map (module HashRings.ReadPort.Response) (module RealsMap.ReadPort.Request)
     hash_ring_resp ~f:(fun resp ->
       { RealsMap.ReadPort.RequestData.address = resp.real_idx }
     )
   in
   let real_map_read = RealsMap.ReadPort.create real_map_req real_map_resp in
 
-  let real_lookup_resp = Transaction.map (module RealsMap.ReadPort.Response) (module RealLookupResp)
-    real_map_resp ~f:(fun resp -> { RealLookupRespData.real_ip = resp.ip })
+  let hash_ring_resp = HashRings.ReadPort.Response.pipe_source spec hash_ring_resp in
+
+  let real_lookup_resp = Transaction.map2 (module RealsMap.ReadPort.Response) (module HashRings.ReadPort.Response) (module RealLookupResp)
+    real_map_resp hash_ring_resp ~f:(fun real_resp hash_resp -> { RealLookupRespData.real_ip = real_resp.ip; real_idx = hash_resp.real_idx })
   in
 
   real_lookup_resp, hash_ring_read, real_map_read
@@ -238,7 +241,9 @@ let create
 
   let pkt_info = PacketInfoTst.bufferize spec pkt_info in
 
-  let real_lookup_resp, hash_ring_read, reals_map_read = real_lookup real_lookup_req in
+  let real_lookup_resp, hash_ring_read, reals_map_read = real_lookup spec real_lookup_req in
+
+  let real_lookup_resp, real_lookup_resp_for_stats = RealLookupResp.fork real_lookup_resp in
 
   let outer_ip_hdr = Transaction.map2 (module PacketInfoTst) (module RealLookupResp) (module IPv4_hdr)
     pkt_info real_lookup_resp ~f:(fun pkt resp -> 
@@ -262,6 +267,17 @@ let create
     IPv4_hdr.bufferize spec
   in
 
+  let outer_ip_hdr, outer_ip_hdr_for_stats = IPv4_hdr.fork outer_ip_hdr in
+
+  let module IP_Real_Pair = Transaction.Of_pair(Common.IPv4Header)(RealLookupRespData) in
+  let ip_with_real = IP_Real_Pair.join_comb outer_ip_hdr_for_stats (RealLookupResp.pipe_source spec real_lookup_resp_for_stats) in
+  let ip_hdrs_by_real = IP_Real_Pair.demux Consts.max_reals ip_with_real ~f:(fun data -> data.snd.real_idx) in
+
+  let outer_ip_hdr, outer_ip_hdr_for_stats = IPv4_hdr.fork outer_ip_hdr in
+
+  let stats =  Stat.hierarchical scope spec ~ip_hdr:outer_ip_hdr_for_stats in
+  let per_real_stats = Base.List.map ip_hdrs_by_real ~f:(fun x -> Stat.hierarchical scope spec ~ip_hdr:(IP_Real_Pair.fst x)) in
+
   let vip_map_write = VIP_map.WritePort.create_wires () in
   VIP_map.hierarchical ~name:(Scope.name scope "vip_map") ~capacity:Consts.max_vips scope spec ~query_port:vip_map_query ~write_port:vip_map_write;
   let vip_map_bus = VIP_map.create_bus_adapter spec vip_map_write in
@@ -280,6 +296,14 @@ let create
   Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module VIP_map.BusAgent) vip_map_bus) 0 1;
   Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module HashRings.BusAgent) hash_ring_bus) 2 3;
   Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module RealsMap.BusAgent) reals_map_bus) 4 5;
+
+  Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Stat.BusAgent) stats) 6 9;
+
+  Base.List.iteri per_real_stats ~f:(fun i bus ->
+    let addr_start = 10 + 4 * i in
+    let addr_end = addr_start + 3 in
+    Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Stat.BusAgent) bus) addr_start addr_end;
+  );
 
   Bus.Interconnect.complete_comb bus_interconnect spec;
   

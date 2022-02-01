@@ -46,18 +46,18 @@ let%expect_test "dataplane" =
   in
 
   let write_vip_map ip idx =
-    BusHost.schedule_write bus 64 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 ip));
-    BusHost.schedule_write bus 65 idx
+    BusHost.schedule_write bus 0 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 ip));
+    BusHost.schedule_write bus 1 idx
   in
 
   let write_hash_ring vip_idx slot real_idx = 
-    BusHost.schedule_write bus 67 real_idx;
-    BusHost.schedule_write bus 66 ((vip_idx * Balancer.Consts.ring_size) + slot);
+    BusHost.schedule_write bus 3 real_idx;
+    BusHost.schedule_write bus 2 ((vip_idx * Balancer.Consts.ring_size) + slot);
   in
 
   let write_real_info real_idx real_ip =
-    BusHost.schedule_write bus 69 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 real_ip));
-    BusHost.schedule_write bus 68 real_idx;
+    BusHost.schedule_write bus 5 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 real_ip));
+    BusHost.schedule_write bus 4 real_idx;
   in
   
   Sim.cycle_n sim 2;

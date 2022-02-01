@@ -177,8 +177,14 @@ enum TSE_CTRL_enum {
 // Dataplane
 //------------------------------------------------------------------------------
 
+typedef struct __attribute__((packed)) {
+    uint32_t pkt_cnt;
+    uint32_t bytes_cnt_lo;
+    uint32_t bytes_cnt_hi;
+    uint32_t ignore;
+} pkt_stats;
+
 typedef struct __attribute__((packed,aligned(4))) {
-    uint32_t _reserved[64];
     struct __attribute__((packed)) {
         uint32_t vip_map_vip;
         uint32_t vip_map_idx;
@@ -188,6 +194,9 @@ typedef struct __attribute__((packed,aligned(4))) {
 
         uint32_t reals_map_addr;
         uint32_t reals_map_data;
+
+        pkt_stats stats;
+        pkt_stats per_real_stats[32];
     } balancer;
 } dataplane_t;
 

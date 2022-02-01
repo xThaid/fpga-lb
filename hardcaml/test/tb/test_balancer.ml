@@ -118,9 +118,59 @@ let%expect_test "balancer" =
 
   Sim.cycle_n sim 400;
 
+  let read_stats real_idx = 
+    BusHost.schedule_read bus (10 + real_idx * 4);
+    BusHost.schedule_read bus (10 + real_idx * 4 + 1);
+    BusHost.schedule_read bus (10 + real_idx * 4 + 2);
+
+    Sim.cycle_n sim 5;
+    
+    let pkt_cnt = Linked_queue.dequeue_exn bus.responses in
+    let bytes_cnt_lo = Linked_queue.dequeue_exn bus.responses in
+    let bytes_cnt_hi = Linked_queue.dequeue_exn bus.responses in
+
+    let bytes_cnt = (Int.shift_left bytes_cnt_hi 32) + bytes_cnt_lo in
+
+    Stdio.print_s [%message (pkt_cnt : int) (bytes_cnt : int)]
+  in
+
+  for i = 0 to Balancer.Consts.max_reals - 1 do read_stats i done;
+
   Consumer.expect_transfers consumer;
 
   [%expect {|
+    ((pkt_cnt 2) (bytes_cnt 125))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 2) (bytes_cnt 120))
+    ((pkt_cnt 1) (bytes_cnt 60))
+    ((pkt_cnt 3) (bytes_cnt 267))
+    ((pkt_cnt 1) (bytes_cnt 60))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
+    ((pkt_cnt 0) (bytes_cnt 0))
     (consumed
      (((version 4) (ihl 5) (dscp 00) (ecn 0) (total_length 003f)
        (identification 0000) (flags 0) (fragment_offset 0000) (ttl 64)

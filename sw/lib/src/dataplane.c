@@ -22,3 +22,17 @@ void dataplane_update_hashring(uint32_t vip_idx, int hashring[HASH_RING_SIZE]) {
     }
 }
 
+dataplane_stats_t dataplane_get_stats(int real_idx) {
+    volatile pkt_stats* stats;
+    if (real_idx == -1)
+        stats = &DATAPLANE.balancer.stats;
+    else
+        stats = &DATAPLANE.balancer.per_real_stats[real_idx];
+
+    dataplane_stats_t ret;
+    ret.pkt_cnt = stats->pkt_cnt;
+    ret.bytes_cnt = (((uint64_t) stats->bytes_cnt_hi) << 32) | stats->bytes_cnt_lo;
+
+    return ret;
+}
+

@@ -242,7 +242,7 @@ module BusHost (A : Bus.Agent.S) = struct
     ; bus_o : Bits.t ref A.I.t
     ; queries : bus_query Linked_queue.t
     ; mutable pending_query : bus_query Option.t
-    ; mutable responses : int list
+    ; responses : int Linked_queue.t
     ; mutable save_resp : bool
     }
 
@@ -251,7 +251,7 @@ module BusHost (A : Bus.Agent.S) = struct
     ; bus_o
     ; queries = Linked_queue.create ()
     ; pending_query = None
-    ; responses = []
+    ; responses = Linked_queue.create ()
     ; save_resp = false
     }
 
@@ -273,7 +273,7 @@ module BusHost (A : Bus.Agent.S) = struct
 
   let seq t = 
     if t.save_resp then (
-      t.responses <- Bits.to_int !(t.bus_i.readdata) :: t.responses;
+      Linked_queue.enqueue t.responses (Bits.to_int !(t.bus_i.readdata));
       t.save_resp <- false;
     );
 
@@ -301,7 +301,8 @@ module BusHost (A : Bus.Agent.S) = struct
     Linked_queue.enqueue t.queries (Write (addr, data))
 
   let expect_responses t =
-    Stdio.print_s [%message (List.rev t.responses : int list)]
+    let responses = Linked_queue.to_list t.responses in
+    Stdio.print_s [%message (responses : int list)]
 
 end
 

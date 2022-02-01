@@ -57,7 +57,7 @@ let create
   Flow.Base.connect tx (Eth_flow.to_flow spec tx_eth);
 
   let bus_interconnect = Bus.Interconnect.create (Bus.Agent.build (module BusAgent) bus) in
-  Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Balancer.BusAgent) balancer_bus) 64 69;
+  Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Balancer.BusAgent) balancer_bus) 0 137;
   Bus.Interconnect.complete_comb bus_interconnect spec
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) =

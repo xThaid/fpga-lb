@@ -36,6 +36,7 @@ module Agent = struct
     val connect : t -> t -> unit
 
     val on_write : t -> (int * (Signal.t -> Always.t list)) list -> Always.t
+    val read_from : Signal.register -> t -> (int * Signal.t) list -> unit
 
   end
 
@@ -94,6 +95,22 @@ module Agent = struct
           )
         ]
       ])
+
+    let read_from spec t (cases : (int * Signal.t) list) = 
+      let open Signal in
+
+      let readdata = Always.Variable.wire ~default:(zero 32) in
+
+      Always.(compile [
+        when_ (t.i.read &: ((~:) t.o.waitrequest)) [
+          switch t.i.address (
+            List.map cases ~f:(fun (addr, data) -> Signal.of_int ~width:D.addr_len addr, [readdata <-- data])
+          )
+        ]
+      ]);
+
+      t.o.readdata <== reg spec readdata.value
+
   end
 end
 

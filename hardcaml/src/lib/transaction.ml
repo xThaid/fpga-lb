@@ -114,8 +114,10 @@ module Make (Data : Interface.S) = struct
     
     tst1, tst2
 
-  let demux n sel tst = 
+  let demux n tst ~f = 
     let open Signal in
+
+    let sel = f tst.s.data in
 
     if (Signal.width sel) <> (Signal.address_bits_for n) then
       raise_s [%message "sel signal in demultiplexer has incorrect width"];
@@ -129,8 +131,7 @@ module Make (Data : Interface.S) = struct
     tsts
 
   let demux2_on tst ~f =
-    let sel = f tst.s.data in
-    let tsts = demux 2 sel tst in
+    let tsts = demux 2 tst ~f in
     List.nth_exn tsts 1, List.nth_exn tsts 0
 
   let apply tst ~(f : (valid:Signal.t -> data:Signal.t D.t -> Signal.t)) =
