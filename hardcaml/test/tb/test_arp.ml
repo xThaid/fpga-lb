@@ -118,6 +118,9 @@ let%expect_test "arp" =
     Emitter.add_transfer emitter eth (Bytes.of_char_list (Packet.serialize_arp_pkt arp @ padding))
   in
 
+  inputs.cfg.mac_addr := Bits.of_hex ~width:48 "aabbccddeeff";
+  inputs.cfg.vips := Bits.uresize (Bits.of_hex ~width:32 "0a640001") (32 * 6);
+
   arp_req "a1a2a3a4a5a6" "b1b2b3b4" "0a640001";
   arp_req "f1f2f3f4f5f6" "a1a2a3a4" "0a640001";
   arp_req "f1f2f3f4f5f6" "a1a2a3a4" "0a640001";

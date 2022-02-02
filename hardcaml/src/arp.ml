@@ -22,14 +22,6 @@ module Table = struct
   include Container.Hashtbl(Key)(Data)
 end
 
-module Config = struct
-  let arp_table_capacity = 32
-  let mac_addr = "aabbccddeeff"
-  let mac_addr_bytes = Signal.of_hex ~width:48 mac_addr
-  let ip_addr = [10;100;0;1]
-  let ip_addr_bytes = Base.List.map ip_addr ~f:(Signal.of_int ~width:8) |> Signal.concat_msb
-end
-
 module I = struct
   type 'a t =
     { clock : 'a
@@ -37,6 +29,7 @@ module I = struct
     ; rx : 'a Eth_flow.Src.t
     ; tx : 'a Eth_flow.Dst.t
     ; query : 'a Table.QueryPort.I.t
+    ; cfg : 'a Config.Data.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -50,7 +43,7 @@ module O = struct
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
 
-let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) = 
+let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) ~(cfg : Signal.t Config.Data.t)= 
   let module Serializer = Flow.Serializer(Common.ArpPacket) in
 
   let tst_in = EthArpTst.join_comb rx.hdr (Serializer.deserialize spec rx.flow) in
@@ -71,21 +64,22 @@ let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) =
 
   let pkt_out = EthArpTst.filter_comb arp_in_req ~f:(fun pkt ->
     let open Signal in
-    pkt.snd.tpa ==: Config.ip_addr_bytes
+    let vips = split_msb ~part_width:32 cfg.vips in
+    Base.List.map vips ~f:(fun vip -> (pkt.snd.tpa ==: vip) &: (vip <>:. 0)) |> reduce ~f:( |: )
   ) |>
 
   EthArpTst.map_comb ~f:(fun pkt ->
     let eth =
       { pkt.fst with
         dest_mac = pkt.fst.src_mac
-      ; src_mac = Config.mac_addr_bytes
+      ; src_mac = cfg.mac_addr
       }
     in
     let arp =
       { pkt.snd with
         oper = Signal.of_int ~width:16 2
-      ; sha = Config.mac_addr_bytes
-      ; spa = Config.ip_addr_bytes
+      ; sha = cfg.mac_addr
+      ; spa = pkt.snd.tpa
       ; tha = pkt.snd.sha
       ; tpa = pkt.snd.spa
       }
@@ -101,13 +95,15 @@ let create
       spec
       ~(rx : Eth_flow.t)
       ~(tx : Eth_flow.t)
-      ~(query : Table.QueryPort.t) =
+      ~(query : Table.QueryPort.t) 
+      ~(cfg : Signal.t Config.Data.t)
+      =
   
   let table_write_port = Table.WritePort.create_wires () in
   
-  Table.hierarchical ~name:"arp_table" ~capacity:Config.arp_table_capacity scope spec ~query_port:query ~write_port:table_write_port;
+  Table.hierarchical ~name:"arp_table" ~capacity:32 scope spec ~query_port:query ~write_port:table_write_port;
   
-  Eth_flow.connect tx (datapath spec ~rx table_write_port)
+  Eth_flow.connect tx (datapath spec ~rx table_write_port ~cfg)
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
@@ -116,12 +112,13 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let tx = Eth_flow.t_of_if o.tx i.tx in
   let query = Table.QueryPort.t_of_if i.query o.query in
 
-  create scope spec ~rx ~tx ~query
+  create scope spec ~rx ~tx ~query ~cfg:i.cfg
 
 let hierarchical
       (scope : Scope.t)
       spec
-      ~(rx : Eth_flow.t) =
+      ~(rx : Eth_flow.t) 
+      ~(cfg : Signal.t Config.Data.t) =
   let module H = Hierarchy.In_scope(I)(O) in
 
   let clock = Reg_spec.clock spec in
@@ -134,7 +131,7 @@ let hierarchical
   let tx_i, tx_o = Eth_flow.if_of_t tx in
   let query_i, query_o = Table.QueryPort.if_of_t query in
 
-  let i = {I.clock; clear; rx = rx_i; tx = tx_o; query = query_i} in
+  let i = {I.clock; clear; rx = rx_i; tx = tx_o; query = query_i; cfg} in
   let o = {O.rx = rx_o; tx = tx_i; query = query_o} in
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) = 

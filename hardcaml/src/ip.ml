@@ -14,6 +14,7 @@ module I = struct
     ; ip_rx : 'a IPv4_flow.Src.t
     ; ip_tx : 'a IPv4_flow.Dst.t
     ; arp_query : 'a Arp.Table.QueryPort.O.t
+    ; config : 'a Config.Data.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -33,7 +34,7 @@ let calc_checksum (type a) (module B : Comb.S with type t = a) ipv4_hdr =
   let module IPv4_comb = Common.IPv4Header.Make_comb(B) in
   Hashes.one_complement_sum (module B) (IPv4_comb.pack ~rev:true ipv4_hdr)
 
-let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) =
+let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cfg : Signal.t Config.Data.t) =
   let open Signal in
 
   let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.QueryPort.Request) ip_rx.hdr
@@ -63,7 +64,7 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) =
   let with_arp_resp, eth_hdr = 
     Transaction.fork_map (module WithArpResp) (module Eth_hdr) flow_with_arp_resp.hdr ~f:(fun data ->
       { Common.EthernetHeader.dest_mac = data.fst.data.mac
-      ; src_mac = of_hex ~width:48 "aabbccddeeff"
+      ; src_mac = cfg.mac_addr
       ; ether_type = of_int ~width:16 0x0800
       }
     )
@@ -79,9 +80,10 @@ let create
       spec
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
-      ~(arp_query : Arp.Table.QueryPort.t) =
+      ~(arp_query : Arp.Table.QueryPort.t) 
+      ~(cfg : Signal.t Config.Data.t) =
 
-  let eth_tx = egress spec ~ip_rx ~arp_query in
+  let eth_tx = egress spec ~ip_rx ~arp_query ~cfg in
 
   let ip_tx = IPv4_flow.from_flow spec eth_rx.flow in
   Eth_hdr.drop eth_rx.hdr;
@@ -97,7 +99,7 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let ip_tx = IPv4_flow.t_of_if o.ip_tx i.ip_tx in
   let arp_query = Arp.Table.QueryPort.t_of_if o.arp_query i.arp_query in
 
-  let eth_tx2, ip_tx2 = create scope spec ~eth_rx ~ip_rx ~arp_query in
+  let eth_tx2, ip_tx2 = create scope spec ~eth_rx ~ip_rx ~arp_query ~cfg:i.config in
 
   Eth_flow.connect eth_tx eth_tx2;
   IPv4_flow.connect ip_tx ip_tx2
@@ -108,6 +110,7 @@ let hierarchical
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
       ~(arp_query : Arp.Table.QueryPort.t)
+      ~(cfg : Signal.t Config.Data.t)
       =
   let module H = Hierarchy.In_scope(I)(O) in
 
@@ -125,7 +128,7 @@ let hierarchical
 
   let arp_query_i, arp_query_o = Arp.Table.QueryPort.if_of_t arp_query in
 
-  let i = {I.clock; clear; eth_rx = eth_rx_i; eth_tx = eth_tx_o; ip_rx = ip_rx_i; ip_tx = ip_tx_o; arp_query = arp_query_o} in
+  let i = {I.clock; clear; eth_rx = eth_rx_i; eth_tx = eth_tx_o; ip_rx = ip_rx_i; ip_tx = ip_tx_o; arp_query = arp_query_o; config = cfg} in
   let o = {O.eth_rx = eth_rx_o; eth_tx = eth_tx_i; ip_rx = ip_rx_o; ip_tx = ip_tx_i; arp_query = arp_query_i} in
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) = 

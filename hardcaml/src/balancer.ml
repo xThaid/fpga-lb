@@ -259,7 +259,7 @@ let create
       ; ttl = of_int ~width:8 100
       ; protocol = of_int ~width:8 4
       ; hdr_checksum = zero 16
-      ; src_ip = of_int ~width:32 0x10101010 (*TODO*)
+      ; src_ip = of_int ~width:32 0xac100001 (*TODO*)
       ; dst_ip = resp.real_ip
       }
     ) |>

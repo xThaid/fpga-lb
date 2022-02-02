@@ -43,11 +43,13 @@ let create
   let rx_eth_arp = List.nth eth_flows 0 in
   let rx_eth_ip = List.nth eth_flows 1 in
 
-  let arp_tx_eth, arp_query_port = Arp.hierarchical scope spec ~rx:rx_eth_arp in
+  let config, config_bus = Config.create spec in
+
+  let arp_tx_eth, arp_query_port = Arp.hierarchical scope spec ~rx:rx_eth_arp ~cfg:config in
 
   let lb_ip_tx = IPv4_flow.create_wires () in
 
-  let ip_tx_eth, ip_tx_ip = Ip.hierarchical scope spec ~eth_rx:rx_eth_ip ~ip_rx:lb_ip_tx ~arp_query:arp_query_port in
+  let ip_tx_eth, ip_tx_ip = Ip.hierarchical scope spec ~eth_rx:rx_eth_ip ~ip_rx:lb_ip_tx ~arp_query:arp_query_port ~cfg:config in
 
   let lb_ip_tx2, balancer_bus = Balancer.hierarchical scope spec ~ip_rx:ip_tx_ip in
   IPv4_flow.connect lb_ip_tx lb_ip_tx2;
@@ -58,6 +60,7 @@ let create
 
   let bus_interconnect = Bus.Interconnect.create (Bus.Agent.build (module BusAgent) bus) in
   Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Balancer.BusAgent) balancer_bus) 0 137;
+  Bus.Interconnect.add_agent bus_interconnect (Bus.Agent.build (module Config.BusAgent) config_bus) 138 145;
   Bus.Interconnect.complete_comb bus_interconnect spec
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) =

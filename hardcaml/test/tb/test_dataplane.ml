@@ -65,6 +65,10 @@ let%expect_test "dataplane" =
   emitter.enabled <- true;
   consumer.enabled <- true;
 
+  BusHost.schedule_write bus 138 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 "ccddeeff"));
+  BusHost.schedule_write bus 139 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 "0000aabb"));
+  BusHost.schedule_write bus 140 (Constant.to_int (Constant.of_hex_string ~signedness:Unsigned ~width:32 "0a640001"));
+
   write_vip_map "88008800" 2;
   write_vip_map "99009900" 3;
 
@@ -130,4 +134,4 @@ let%expect_test "dataplane" =
   Consumer.expect_data_digest consumer;
 
   [%expect {|
-    (digest 26653faf6a26e3dc4d051f96fcd2cc82) |}]
+    (digest 21871f54375a0e44b5db895fea7dd5d9) |}]
