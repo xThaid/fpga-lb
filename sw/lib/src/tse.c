@@ -4,10 +4,10 @@
 
 volatile int phyaddr;
 
-void tse_setup(void) {
+void tse_setup(uint64_t mac_addr) {
     // Initialize the MAC address
-    TSE.base.mac0 = 0x116E6001;
-    TSE.base.mac1 = 0x00000F02;
+    TSE.base.mac0 = mac_addr;
+    TSE.base.mac1 = mac_addr >> 32;
 
     // Specify the address of the PHY device to be accessed through MDIO interface
     TSE.base.mdio_addr0 = 0x10;

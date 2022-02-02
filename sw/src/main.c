@@ -27,7 +27,7 @@ void stats_task(void *pvParameters) {
 
         for (int i = 0; i < MAX_REALS_CNT; i++) {
             dataplane_stats_t stats = dataplane_get_stats(i);
-            jtag_uart_printf("%d %d %ld\n", i, xTaskGetTickCount(), stats.bytes_cnt);
+            jtag_uart_printf("%d %u %u %u\n", i, stats.pkt_cnt, (uint32_t) (stats.bytes_cnt >> 32), (uint32_t) stats.bytes_cnt);
         }
         
         vTaskDelay(100);
@@ -43,22 +43,29 @@ void heartBeatTask(void *pvParameters) {
 }
 
 static void dataplane_setup() {
-    dataplane_add_vip(0x0a001001, 3);
+    for (int i = 0; i < MAX_VIPS_CNT; i++) {
+        if (VIPS[i][0] == 0)
+            continue;
 
-    int hashring[HASH_RING_SIZE] = {10, 11, 10, 11, 10, 11, 10, 11};
-    dataplane_update_hashring(3, hashring);
+        uint32_t ip = (VIPS[i][0] << 24) | (VIPS[i][1] << 16) | (VIPS[i][2] << 8) | (VIPS[i][3] << 0);
+        dataplane_add_vip(ip, i);
+        dataplane_update_hashring(i, HASHRING[i]);
+    }
 
-    dataplane_update_real(0, 0x0a640000);
-    dataplane_update_real(10, 0x0a640001);
-    dataplane_update_real(11, 0x0a640002);
+    for (int i = 0; i < MAX_REALS_CNT; i++) {
+        if (REALS[i] == 0)
+            continue;
+
+        dataplane_update_real(i, REALS[i]);
+    }
 }
 
 int main(void) {
     dataplane_setup();
-    tse_setup();
+    tse_setup(MAC_ADDR);
 
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
-    xTaskCreate(stats_task, "Stats task", 256, NULL, 1, NULL);
+    xTaskCreate(stats_task, "Stats task", 512, NULL, 1, NULL);
 
     vTaskStartScheduler();
 

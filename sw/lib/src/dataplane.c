@@ -14,7 +14,7 @@ void dataplane_update_real(uint32_t idx, uint32_t ip) {
     DATAPLANE.balancer.reals_map_addr = idx;
 }
 
-void dataplane_update_hashring(uint32_t vip_idx, int hashring[HASH_RING_SIZE]) {
+void dataplane_update_hashring(uint32_t vip_idx, const uint8_t* hashring) {
     for (int i = 0; i < HASH_RING_SIZE; i++) {
         DATAPLANE.balancer.hash_ring_data = hashring[i];
         asm volatile("" ::: "memory");

@@ -6,8 +6,8 @@ import curses
 import intel_jtag_uart
 
 REAL_NAMES = {
-    10: "192.168.0.100",
-    11: "192.168.100.101"
+    10: "10.100.0.1",
+    11: "10.100.0.2"
 }
 
 def conv_unit(val):
@@ -44,9 +44,9 @@ def main(stdscr):
         uart_str = bytes_raw.decode('utf-8')
         for entry in uart_str.split('\n'):
             comp = entry.split(' ')
-            if len(comp) != 3:
+            if len(comp) != 4:
                 continue
-            stats[int(comp[0])] = (int(comp[1]), int(comp[2]))
+            stats[int(comp[0])] = (int(comp[1]), (int(comp[2]) << 32) | int(comp[3]))
 
         if last_stats is None:
             last_stats = dict(stats)
