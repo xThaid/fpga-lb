@@ -4,9 +4,7 @@
 
 #include "io.h"
 
-#define DELAY_LOOP 10000
-
-int fibonacci[100];
+#include "config.h"
 
 void display_num(uint32_t number) {
     int digits[8] = {-1, -1, -1, -1, -1, -1, -1, 0};
@@ -22,10 +20,16 @@ void display_num(uint32_t number) {
         gpio_7seg_set_digit(i, digits[i]);
 }
 
-void stats_fetcher_task(void *pvParameters) {
+void stats_task(void *pvParameters) {
     while(1) {
-        dataplane_stats_t stats = dataplane_get_stats(-1);
-        display_num(stats.pkt_cnt);
+        dataplane_stats_t total_stats = dataplane_get_stats(-1);
+        display_num(total_stats.pkt_cnt);
+
+        for (int i = 0; i < MAX_REALS_CNT; i++) {
+            dataplane_stats_t stats = dataplane_get_stats(i);
+            jtag_uart_printf("%d %d %ld\n", i, xTaskGetTickCount(), stats.bytes_cnt);
+        }
+        
         vTaskDelay(100);
     }
 }
@@ -54,7 +58,7 @@ int main(void) {
     tse_setup();
 
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
-    xTaskCreate(stats_fetcher_task, "Stats fetcher task", 128, NULL, 1, NULL);
+    xTaskCreate(stats_task, "Stats task", 256, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
