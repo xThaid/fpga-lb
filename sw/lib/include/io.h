@@ -198,6 +198,13 @@ typedef struct __attribute__((packed,aligned(4))) {
         pkt_stats stats;
         pkt_stats per_real_stats[32];
     } balancer;
+
+    struct __attribute__((packed)) {
+        uint32_t mac_addr_lo;
+        uint32_t mac_addr_hi;
+
+        uint32_t vips[6];
+    } config;
 } dataplane_t;
 
 #define DATAPLANE (*((volatile dataplane_t*) (0x80004000UL)))

@@ -20,11 +20,17 @@ void display_num(uint32_t number) {
         gpio_7seg_set_digit(i, digits[i]);
 }
 
-void stats_task(void *pvParameters) {
+void stats_display_task(void *pvParameters) {
     while(1) {
         dataplane_stats_t total_stats = dataplane_get_stats(-1);
         display_num(total_stats.pkt_cnt);
 
+        vTaskDelay(100);
+    }
+}
+
+void stats_sender_task(void *pvParameters) {
+    while(1) {
         for (int i = 0; i < MAX_REALS_CNT; i++) {
             dataplane_stats_t stats = dataplane_get_stats(i);
             jtag_uart_printf("%d %u %u %u\n", i, stats.pkt_cnt, (uint32_t) (stats.bytes_cnt >> 32), (uint32_t) stats.bytes_cnt);
@@ -43,6 +49,8 @@ void heartBeatTask(void *pvParameters) {
 }
 
 static void dataplane_setup() {
+    dataplane_set_mac_addr(MAC_ADDR);
+
     for (int i = 0; i < MAX_VIPS_CNT; i++) {
         if (VIPS[i][0] == 0)
             continue;
@@ -53,10 +61,11 @@ static void dataplane_setup() {
     }
 
     for (int i = 0; i < MAX_REALS_CNT; i++) {
-        if (REALS[i] == 0)
+        if (REALS[i][0] == 0)
             continue;
 
-        dataplane_update_real(i, REALS[i]);
+        uint32_t ip = (REALS[i][0] << 24) | (REALS[i][1] << 16) | (REALS[i][2] << 8) | (REALS[i][3] << 0);
+        dataplane_update_real(i, ip);
     }
 }
 
@@ -65,7 +74,8 @@ int main(void) {
     tse_setup(MAC_ADDR);
 
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
-    xTaskCreate(stats_task, "Stats task", 512, NULL, 1, NULL);
+    xTaskCreate(stats_display_task, "Stats display task", 256, NULL, 1, NULL);
+    xTaskCreate(stats_sender_task, "Stats sender task", 256, NULL, 1, NULL);
 
     vTaskStartScheduler();
 

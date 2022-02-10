@@ -2,10 +2,17 @@
 
 #include "io.h"
 
+void dataplane_set_mac_addr(uint64_t mac) {
+    DATAPLANE.config.mac_addr_lo = mac;
+    DATAPLANE.config.mac_addr_hi = mac >> 32;
+}
+
 void dataplane_add_vip(uint32_t vip, uint32_t idx) {
     DATAPLANE.balancer.vip_map_vip = vip;
     asm volatile("" ::: "memory");
     DATAPLANE.balancer.vip_map_idx = idx;
+
+    DATAPLANE.config.vips[0] = vip;
 }
 
 void dataplane_update_real(uint32_t idx, uint32_t ip) {

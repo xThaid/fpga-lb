@@ -6,8 +6,8 @@ import curses
 import intel_jtag_uart
 
 REAL_NAMES = {
-    10: "10.100.0.1",
-    11: "10.100.0.2"
+    10: "192.168.0.150",
+    11: "192.168.0.151"
 }
 
 def conv_unit(val):

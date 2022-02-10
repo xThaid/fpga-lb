@@ -12,6 +12,8 @@ typedef struct {
     uint64_t bytes_cnt;
 } dataplane_stats_t;
 
+void dataplane_set_mac_addr(uint64_t mac);
+
 void dataplane_add_vip(uint32_t vip, uint32_t idx);
 void dataplane_update_real(uint32_t idx, uint32_t ip);
 void dataplane_update_hashring(uint32_t vip_idx, const uint8_t* hashring);
