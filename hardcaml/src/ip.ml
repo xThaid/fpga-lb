@@ -5,6 +5,13 @@ module IPv4_hdr = Transaction.Make(Common.IPv4Header)
 module Eth_flow = Flow.With_header(Common.EthernetHeader)
 module IPv4_flow = Flow.With_header(Common.IPv4Header)
 
+module Config = struct
+  type 'a t =
+    { mac_addr : 'a [@bits 48]
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
 module I = struct
   type 'a t =
     { clock : 'a
@@ -14,7 +21,7 @@ module I = struct
     ; ip_rx : 'a IPv4_flow.Src.t
     ; ip_tx : 'a IPv4_flow.Dst.t
     ; arp_query : 'a Arp.Table.QueryPort.O.t
-    ; config : 'a Config.Data.t
+    ; config : 'a Config.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -34,7 +41,7 @@ let calc_checksum (type a) (module B : Comb.S with type t = a) ipv4_hdr =
   let module IPv4_comb = Common.IPv4Header.Make_comb(B) in
   Hashes.one_complement_sum (module B) (IPv4_comb.pack ~rev:true ipv4_hdr)
 
-let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cfg : Signal.t Config.Data.t) =
+let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cfg : Signal.t Config.t) =
   let open Signal in
 
   let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.QueryPort.Request) ip_rx.hdr
@@ -81,7 +88,7 @@ let create
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
       ~(arp_query : Arp.Table.QueryPort.t) 
-      ~(cfg : Signal.t Config.Data.t) =
+      ~(cfg : Signal.t Config.t) =
 
   let eth_tx = egress spec ~ip_rx ~arp_query ~cfg in
 
@@ -110,7 +117,7 @@ let hierarchical
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
       ~(arp_query : Arp.Table.QueryPort.t)
-      ~(cfg : Signal.t Config.Data.t)
+      ~(cfg : Signal.t Config.t)
       =
   let module H = Hierarchy.In_scope(I)(O) in
 

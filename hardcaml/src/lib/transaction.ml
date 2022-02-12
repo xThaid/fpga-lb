@@ -65,6 +65,7 @@ module Make (Data : Interface.S) = struct
   let outputs (t : t) = t.d
   let create_wires () = t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
   let create ~valid ~data = t_of_if {Src.valid; data} (Dst.Of_signal.wires ())
+  let create_empty () = create ~valid:Signal.gnd ~data:(Data.Of_signal.of_int 0)
 
   let apply_names ?prefix ?suffix t =
     let src = Src.Of_signal.apply_names ?prefix ?suffix t.s in
@@ -224,6 +225,46 @@ module Of_pair (FstData : Interface.S) (SndData : Interface.S) = struct
     let t1, t2 = split_comb tst in
     Signal.assign (Fst.ready t1) Signal.vdd;
     t2
+
+end
+
+module Two_way (ReqData : Interface.S) (RespData : Interface.S) = struct
+  module Req = Make(ReqData)
+  module Resp = Make(RespData)
+
+  module Src = struct
+    type 'a t =
+      { req : 'a Req.Src.t
+      ; resp : 'a Resp.Dst.t
+      }
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+  end
+
+  module Dst = struct
+    type 'a t =
+      { req : 'a Req.Dst.t
+      ; resp : 'a Resp.Src.t
+      }
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+  end
+
+  type t = 
+    { req : Req.t
+    ; resp : Resp.t
+    }
+
+  let t_of_if (s : Signal.t Src.t) (d : Signal.t Dst.t) =
+    let req = Req.t_of_if s.req d.req in
+    let resp = Resp.t_of_if d.resp s.resp in
+    {req; resp}
+
+  let if_of_t (t : t) = 
+    let s = {Src.req = t.req.s; resp = t.resp.d} in
+    let d = {Dst.req = t.req.d; resp = t.resp.s} in
+    s, d
+
+  let create req resp = {req; resp}
+  let create_wires () = t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
 end
 

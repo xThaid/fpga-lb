@@ -22,6 +22,23 @@ module Table = struct
   include Container.Hashtbl(Key)(Data)
 end
 
+module RequestData = struct
+  type 'a t = 
+    { ip : 'a [@bits 32]
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
+module ResponseData = struct
+  type 'a t = 
+    { mac : 'a [@bits 48]
+    ; error : 'a
+    }
+  [@@deriving sexp_of, hardcaml]
+end
+
+module OnArpRequest = Transaction.Two_way(RequestData)(ResponseData)
+
 module I = struct
   type 'a t =
     { clock : 'a
@@ -29,7 +46,7 @@ module I = struct
     ; rx : 'a Eth_flow.Src.t
     ; tx : 'a Eth_flow.Dst.t
     ; query : 'a Table.QueryPort.I.t
-    ; cfg : 'a Config.Data.t
+    ; on_arp_req : 'a OnArpRequest.Dst.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -39,11 +56,12 @@ module O = struct
     { rx : 'a Eth_flow.Dst.t 
     ; tx : 'a Eth_flow.Src.t
     ; query : 'a Table.QueryPort.O.t
+    ; on_arp_req : 'a OnArpRequest.Src.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
 
-let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) ~(cfg : Signal.t Config.Data.t)= 
+let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) ~(on_arp_req : OnArpRequest.t) = 
   let module Serializer = Flow.Serializer(Common.ArpPacket) in
 
   let tst_in = EthArpTst.join_comb rx.hdr (Serializer.deserialize spec rx.flow) in
@@ -62,30 +80,34 @@ let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) ~(cf
     Signal.vdd
   );
 
-  let pkt_out = EthArpTst.filter_comb arp_in_req ~f:(fun pkt ->
-    let open Signal in
-    let vips = split_msb ~part_width:32 cfg.vips in
-    Base.List.map vips ~f:(fun vip -> (pkt.snd.tpa ==: vip) &: (vip <>:. 0)) |> reduce ~f:( |: )
-  ) |>
+  let arp_in_req, on_arp_req_req = Transaction.fork_map (module EthArpTst) (module OnArpRequest.Req)
+    arp_in_req ~f:(fun x -> { RequestData.ip = x.snd.tpa })
+  in
 
-  EthArpTst.map_comb ~f:(fun pkt ->
-    let eth =
-      { pkt.fst with
-        dest_mac = pkt.fst.src_mac
-      ; src_mac = cfg.mac_addr
-      }
-    in
-    let arp =
-      { pkt.snd with
-        oper = Signal.of_int ~width:16 2
-      ; sha = cfg.mac_addr
-      ; spa = pkt.snd.tpa
-      ; tha = pkt.snd.sha
-      ; tpa = pkt.snd.spa
-      }
-    in
-    EthArpTst.Data.create eth arp
-  ) in
+  let arp_in_req = EthArpTst.pipe_source spec arp_in_req in
+  OnArpRequest.Req.connect on_arp_req.req (OnArpRequest.Req.pipe_source spec on_arp_req_req);
+
+  let pkt_out = Transaction.filter_map2 (module EthArpTst) (module OnArpRequest.Resp) (module EthArpTst)
+    arp_in_req on_arp_req.resp ~f:(fun pkt resp -> 
+      let open Signal in
+      let eth =
+        { pkt.fst with
+          dest_mac = pkt.fst.src_mac
+        ; src_mac = resp.mac
+        }
+      in
+      let arp =
+        { pkt.snd with
+          oper = Signal.of_int ~width:16 2
+        ; sha = resp.mac
+        ; spa = pkt.snd.tpa
+        ; tha = pkt.snd.sha
+        ; tpa = pkt.snd.spa
+        }
+      in
+      EthArpTst.Data.create eth arp, ~:(resp.error)
+    )
+  in
 
   let eth_out, arp_out = EthArpTst.split_comb pkt_out in
   Eth_flow.create (EthTst.bufferize spec eth_out) (Serializer.serialize spec arp_out)
@@ -96,14 +118,14 @@ let create
       ~(rx : Eth_flow.t)
       ~(tx : Eth_flow.t)
       ~(query : Table.QueryPort.t) 
-      ~(cfg : Signal.t Config.Data.t)
+      ~(on_arp_req : OnArpRequest.t)
       =
   
   let table_write_port = Table.WritePort.create_wires () in
   
   Table.hierarchical ~name:"arp_table" ~capacity:32 scope spec ~query_port:query ~write_port:table_write_port;
   
-  Eth_flow.connect tx (datapath spec ~rx table_write_port ~cfg)
+  Eth_flow.connect tx (datapath spec ~rx table_write_port ~on_arp_req)
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
@@ -111,14 +133,15 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let rx = Eth_flow.t_of_if i.rx o.rx in
   let tx = Eth_flow.t_of_if o.tx i.tx in
   let query = Table.QueryPort.t_of_if i.query o.query in
+  let on_arp_req = OnArpRequest.t_of_if o.on_arp_req i.on_arp_req in
 
-  create scope spec ~rx ~tx ~query ~cfg:i.cfg
+  create scope spec ~rx ~tx ~query ~on_arp_req
 
 let hierarchical
       (scope : Scope.t)
       spec
       ~(rx : Eth_flow.t) 
-      ~(cfg : Signal.t Config.Data.t) =
+      ~(on_arp_req : OnArpRequest.t) =
   let module H = Hierarchy.In_scope(I)(O) in
 
   let clock = Reg_spec.clock spec in
@@ -130,9 +153,10 @@ let hierarchical
   let rx_i, rx_o = Eth_flow.if_of_t rx in
   let tx_i, tx_o = Eth_flow.if_of_t tx in
   let query_i, query_o = Table.QueryPort.if_of_t query in
+  let arp_req_s, arp_req_d = OnArpRequest.if_of_t on_arp_req in
 
-  let i = {I.clock; clear; rx = rx_i; tx = tx_o; query = query_i; cfg} in
-  let o = {O.rx = rx_o; tx = tx_i; query = query_o} in
+  let i = {I.clock; clear; rx = rx_i; tx = tx_o; query = query_i; on_arp_req = arp_req_d} in
+  let o = {O.rx = rx_o; tx = tx_i; query = query_o; on_arp_req = arp_req_s} in
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) = 
     let o = O.Of_signal.wires () in create_from_if scope i o; o

@@ -496,6 +496,7 @@ module With_header (Data : Interface.S) = struct
     t_of_if (Src.Of_signal.wires ()) (Dst.Of_signal.wires ())
 
   let create hdr flow = {hdr = hdr; flow}
+  let create_empty () = create (Header.create_empty ()) (Base.create_empty ())
 
   let apply_names ?prefix ?suffix t =
     let src, dst = if_of_t t in

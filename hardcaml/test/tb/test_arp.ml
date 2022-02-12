@@ -84,12 +84,49 @@ let%expect_test "arp_table" =
   [%expect {| f1ab05e02ca13f52c53aa1c8ce2bb09c |}]
 
 module ArpSim = struct
-  module I = Arp.I
-  module O = Arp.O
+  module Eth_flow = Flow.With_header(Common.EthernetHeader)
+
+  module I = struct
+    type 'a t =
+      { clock : 'a
+      ; clear : 'a
+      ; rx : 'a Eth_flow.Src.t
+      ; tx : 'a Eth_flow.Dst.t
+      ; query : 'a Arp.Table.QueryPort.I.t
+      }
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+  end
+  
+  module O = struct
+    type 'a t = 
+      { rx : 'a Eth_flow.Dst.t 
+      ; tx : 'a Eth_flow.Src.t
+      ; query : 'a Arp.Table.QueryPort.O.t
+      }
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
+  end
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
     let o = O.Of_signal.wires () in
-    Arp.create_from_if scope i o;
+
+    let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
+
+    let rx = Eth_flow.t_of_if i.rx o.rx in
+    let tx = Eth_flow.t_of_if o.tx i.tx in
+    let query = Arp.Table.QueryPort.t_of_if i.query o.query in
+
+    let on_arp_req = Arp.OnArpRequest.create_wires () in
+    Arp.OnArpRequest.Resp.connect on_arp_req.resp (Transaction.map (module Arp.OnArpRequest.Req) (module Arp.OnArpRequest.Resp)
+      on_arp_req.req ~f:(fun arp_req ->
+        let open Signal in
+        { Arp.ResponseData.mac = Signal.of_hex ~width:48 "aabbccddeeff"
+        ; error = arp_req.ip <>: (Signal.of_hex ~width:32 "0a640001")
+        }
+      )
+    );
+    
+    Arp.create scope spec ~rx ~tx ~query ~on_arp_req;
+
     o
 
 end
@@ -117,9 +154,6 @@ let%expect_test "arp" =
   
     Emitter.add_transfer emitter eth (Bytes.of_char_list (Packet.serialize_arp_pkt arp @ padding))
   in
-
-  inputs.cfg.mac_addr := Bits.of_hex ~width:48 "aabbccddeeff";
-  inputs.cfg.vips := Bits.uresize (Bits.of_hex ~width:32 "0a640001") (32 * 6);
 
   arp_req "a1a2a3a4a5a6" "b1b2b3b4" "0a640001";
   arp_req "f1f2f3f4f5f6" "a1a2a3a4" "0a640001";
