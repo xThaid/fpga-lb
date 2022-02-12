@@ -57,7 +57,7 @@ module Make (Data : Interface.S) = struct
 
   type data_type = Signal.t D.t
 
-  let data_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
+  let data_len = List.fold Data.Names_and_widths.port_widths ~init:0 ~f:(+)
 
   let t_of_if (s : Signal.t Src.t) (d : Signal.t Dst.t) = {s; d}
   let if_of_t (t : t) =  t.s, t.d
