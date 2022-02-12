@@ -125,10 +125,12 @@ public:
         JtagUART *uart = new JtagUART(0x80000000, 0x80000007);
         MTimer *mtimer = new MTimer(0x80001000, 0x8000100f);
         GPIOControl *gpioctrl = new GPIOControl(0x80002000, 0x80002015);
-        TSE *tse = new TSE(0x80003000, 0x800033ff);
+        TSE *tse0 = new TSE(0x80003000, 0x800033ff);
         Dataplane *dataplane = new Dataplane(0x80004000, 0x800043ff);
+        TSE *tse1 = new TSE(0x80005000, 0x800053ff);
+        LoadGenerator *load_generator = new LoadGenerator(0x80006000, 0x800063ff);
 
-        gpioctrl->setLogAccess(1);
+        tse1->setLogAccess(1);
 
         vex = new VexRiscv(new VVexRiscvCpu());
         ibus = new IBusCtrl();
@@ -139,8 +141,10 @@ public:
         dbus->addSlave(uart);
         dbus->addSlave(mtimer);
         dbus->addSlave(gpioctrl);
-        dbus->addSlave(tse);
+        dbus->addSlave(tse0);
         dbus->addSlave(dataplane);
+        dbus->addSlave(tse1);
+        dbus->addSlave(load_generator);
 
         ibus->avalonRead.assign(&vex->iBusRead);
         ibus->avalonAddress.assign(&vex->iBusAddress);

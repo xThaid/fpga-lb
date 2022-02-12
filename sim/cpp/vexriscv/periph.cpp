@@ -177,3 +177,16 @@ uint32_t Dataplane::read(uint32_t addr) {
 
 void Dataplane::write(uint32_t addr, uint32_t data, uint8_t mask) {
 }
+
+LoadGenerator::LoadGenerator(uint32_t baseAddr, uint32_t endAddr) :
+    MemBusSlave("Load generator", baseAddr, endAddr)
+{
+}
+
+uint32_t LoadGenerator::read(uint32_t addr) {
+    return 0x00000000;
+}
+
+void LoadGenerator::write(uint32_t addr, uint32_t data, uint8_t mask) {
+}
+

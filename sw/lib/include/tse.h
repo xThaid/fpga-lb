@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
-void tse_setup(uint64_t mac_addr);
+void tse0_setup(uint64_t mac_addr);
+void tse1_setup(uint64_t mac_addr);
 
 #endif

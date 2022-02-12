@@ -139,7 +139,8 @@ typedef volatile struct __attribute__((packed,aligned(4))) {
     tse_mdio_t mdio1;
 } tse_t;
 
-#define TSE (*((volatile tse_t*) (0x80003000UL)))
+#define TSE0 (*((volatile tse_t*) (0x80003000UL)))
+#define TSE1 (*((volatile tse_t*) (0x80005000UL)))
 
 enum TSE_CTRL_enum {
     TSE_CTRL_TX_ENA               = (1UL << 0),
@@ -209,9 +210,34 @@ typedef struct __attribute__((packed,aligned(4))) {
 
 #define DATAPLANE (*((volatile dataplane_t*) (0x80004000UL)))
 
+//------------------------------------------------------------------------------
+// Load generator
+//------------------------------------------------------------------------------
+
+typedef struct __attribute__((packed,aligned(4))) {
+    struct __attribute__((packed)) {
+        uint32_t mac_addr_lo;
+        uint32_t mac_addr_hi;
+
+        uint32_t src_ip;
+        uint32_t dst_ip;
+        uint32_t ports;
+
+        uint32_t payload_len;
+        uint32_t tx_period;
+        uint32_t ctrl_flags;
+
+    } config;
+
+    pkt_stats stats;
+} load_generator_t;
+
+#define LOAD_GENERATOR (*((volatile load_generator_t*) (0x80006000UL)))
+
 #include "uart.h"
 #include "gpio.h"
 #include "tse.h"
 #include "dataplane.h"
+#include "load_generator.h"
 
 #endif

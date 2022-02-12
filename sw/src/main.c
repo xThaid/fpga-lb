@@ -3,6 +3,7 @@
 #include "semphr.h"
 
 #include "io.h"
+#include "vsscanf.h"
 
 #include "config.h"
 
@@ -35,8 +36,27 @@ void stats_sender_task(void *pvParameters) {
             dataplane_stats_t stats = dataplane_get_stats(i);
             jtag_uart_printf("%d %u %u %u\n", i, stats.pkt_cnt, (uint32_t) (stats.bytes_cnt >> 32), (uint32_t) stats.bytes_cnt);
         }
+
+        load_generator_stats_t stats = load_generator_get_stats();
+        jtag_uart_printf("100 %u %u %u\n", stats.pkt_cnt, (uint32_t) (stats.bytes_cnt >> 32), (uint32_t) stats.bytes_cnt);
         
         vTaskDelay(100);
+    }
+}
+
+void command_reader_task(void *pvParameters) {
+    char *buf = pvPortMalloc(80);
+
+    while(1) {
+        jtag_uart_readline(buf, 80);
+
+        int lg_enabled, lg_tx_period, lg_payload_len;
+        
+        sscanf(buf, "%d %d %d", &lg_enabled, &lg_tx_period, &lg_payload_len);
+
+        load_generator_set_payload_len(lg_payload_len);
+        load_generator_set_tx_period(lg_tx_period);
+        load_generator_set_enabled(lg_enabled);
     }
 }
 
@@ -48,15 +68,18 @@ void heartBeatTask(void *pvParameters) {
     }
 }
 
+static uint32_t build_ip(const uint8_t *arr) {
+    return (((uint32_t) arr[0]) << 24) | (arr[1] << 16) | (arr[2] << 8) | (arr[3] << 0);
+}
+
 static void dataplane_setup() {
-    dataplane_set_mac_addr(MAC_ADDR);
+    dataplane_set_mac_addr(MAC0_ADDR);
 
     for (int i = 0; i < MAX_VIPS_CNT; i++) {
         if (VIPS[i][0] == 0)
             continue;
 
-        uint32_t ip = (VIPS[i][0] << 24) | (VIPS[i][1] << 16) | (VIPS[i][2] << 8) | (VIPS[i][3] << 0);
-        dataplane_add_vip(ip, i);
+        dataplane_add_vip(build_ip(VIPS[i]), i);
         dataplane_update_hashring(i, HASHRING[i]);
     }
 
@@ -64,18 +87,26 @@ static void dataplane_setup() {
         if (REALS[i][0] == 0)
             continue;
 
-        uint32_t ip = (REALS[i][0] << 24) | (REALS[i][1] << 16) | (REALS[i][2] << 8) | (REALS[i][3] << 0);
-        dataplane_update_real(i, ip);
+        dataplane_update_real(i, build_ip(REALS[i]));
     }
+}
+
+static void load_generator_setup(void) {
+    load_generator_init(LG_MAC_ADDR, build_ip(LG_SRC_IP), build_ip(LG_DST_IP), LG_SRC_PORT, LG_DST_PORT);
+    load_generator_set_payload_len(16);
+    load_generator_set_tx_period(50000000);
 }
 
 int main(void) {
     dataplane_setup();
-    tse_setup(MAC_ADDR);
+    load_generator_setup();
+    tse0_setup(MAC0_ADDR);
+    tse1_setup(MAC1_ADDR);
 
     xTaskCreate(heartBeatTask, "Heartbeat task", 128, NULL, 1, NULL);
     xTaskCreate(stats_display_task, "Stats display task", 256, NULL, 1, NULL);
     xTaskCreate(stats_sender_task, "Stats sender task", 256, NULL, 1, NULL);
+    xTaskCreate(command_reader_task, "Command reader task", 256, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
