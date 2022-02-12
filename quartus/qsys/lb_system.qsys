@@ -65,6 +65,22 @@
          type = "String";
       }
    }
+   element load_generator
+   {
+      datum _sortIndex
+      {
+         value = "10";
+         type = "int";
+      }
+   }
+   element load_generator.bus_agent
+   {
+      datum baseAddress
+      {
+         value = "2147508224";
+         type = "String";
+      }
+   }
    element mac_0
    {
       datum _sortIndex
@@ -78,6 +94,22 @@
       datum baseAddress
       {
          value = "2147495936";
+         type = "String";
+      }
+   }
+   element mac_1
+   {
+      datum _sortIndex
+      {
+         value = "9";
+         type = "int";
+      }
+   }
+   element mac_1.control_port
+   {
+      datum baseAddress
+      {
+         value = "2147504128";
          type = "String";
       }
    }
@@ -174,6 +206,36 @@
    internal="mac_0.mac_status_connection"
    type="conduit"
    dir="end" />
+ <interface
+   name="mac_1_mdio"
+   internal="mac_1.mac_mdio_connection"
+   type="conduit"
+   dir="end" />
+ <interface
+   name="mac_1_misc"
+   internal="mac_1.mac_misc_connection"
+   type="conduit"
+   dir="end" />
+ <interface
+   name="mac_1_pcs_rx_clk"
+   internal="mac_1.pcs_mac_rx_clock_connection"
+   type="clock"
+   dir="end" />
+ <interface
+   name="mac_1_pcs_tx_clk"
+   internal="mac_1.pcs_mac_tx_clock_connection"
+   type="clock"
+   dir="end" />
+ <interface
+   name="mac_1_rgmii"
+   internal="mac_1.mac_rgmii_connection"
+   type="conduit"
+   dir="end" />
+ <interface
+   name="mac_1_status"
+   internal="mac_1.mac_status_connection"
+   type="conduit"
+   dir="end" />
  <interface name="reset" internal="sys_clk.clk_in_reset" type="reset" dir="end" />
  <module name="dataplane" kind="lb_dataplane" version="1.0" enabled="1" />
  <module name="gpio_ctrl" kind="gpio_ctrl" version="1.0" enabled="1" />
@@ -210,7 +272,54 @@
   <parameter name="writeBufferDepth" value="64" />
   <parameter name="writeIRQThreshold" value="8" />
  </module>
+ <module name="load_generator" kind="load_generator" version="1.0" enabled="1" />
  <module name="mac_0" kind="altera_eth_tse" version="20.1" enabled="1">
+  <parameter name="AUTO_DEVICE" value="EP4CE115F29C7" />
+  <parameter name="AUTO_DEVICE_SPEEDGRADE" value="7" />
+  <parameter name="XCVR_RCFG_JTAG_ENABLE" value="0" />
+  <parameter name="XCVR_SET_CAPABILITY_REG_ENABLE" value="0" />
+  <parameter name="XCVR_SET_CSR_SOFT_LOGIC_ENABLE" value="0" />
+  <parameter name="XCVR_SET_PRBS_SOFT_LOGIC_ENABLE" value="0" />
+  <parameter name="XCVR_SET_USER_IDENTIFIER" value="0" />
+  <parameter name="core_variation" value="SMALL_MAC_GIGE" />
+  <parameter name="deviceFamilyName" value="Cyclone IV E" />
+  <parameter name="eg_addr" value="11" />
+  <parameter name="ena_hash" value="false" />
+  <parameter name="enable_alt_reconfig" value="false" />
+  <parameter name="enable_ecc" value="false" />
+  <parameter name="enable_ena" value="32" />
+  <parameter name="enable_gmii_loopback" value="false" />
+  <parameter name="enable_hd_logic" value="false" />
+  <parameter name="enable_mac_flow_ctrl" value="false" />
+  <parameter name="enable_mac_vlan" value="false" />
+  <parameter name="enable_magic_detect" value="false" />
+  <parameter name="enable_ptp_1step" value="false" />
+  <parameter name="enable_sgmii" value="false" />
+  <parameter name="enable_shift16" value="false" />
+  <parameter name="enable_sup_addr" value="false" />
+  <parameter name="enable_timestamping" value="false" />
+  <parameter name="enable_use_internal_fifo" value="true" />
+  <parameter name="export_pwrdn" value="false" />
+  <parameter name="ext_stat_cnt_ena" value="false" />
+  <parameter name="ifGMII" value="RGMII" />
+  <parameter name="ing_addr" value="11" />
+  <parameter name="max_channels" value="1" />
+  <parameter name="mdio_clk_div" value="40" />
+  <parameter name="nf_phyip_rcfg_enable" value="false" />
+  <parameter name="phy_identifier" value="0" />
+  <parameter name="phyip_en_synce_support" value="false" />
+  <parameter name="phyip_pll_base_data_rate" value="1250 Mbps" />
+  <parameter name="phyip_pll_type" value="CMU" />
+  <parameter name="phyip_pma_bonding_mode" value="x1" />
+  <parameter name="starting_channel_number" value="0" />
+  <parameter name="stat_cnt_ena" value="false" />
+  <parameter name="transceiver_type" value="NONE" />
+  <parameter name="tstamp_fp_width" value="4" />
+  <parameter name="useMDIO" value="true" />
+  <parameter name="use_mac_clken" value="false" />
+  <parameter name="use_misc_ports" value="true" />
+ </module>
+ <module name="mac_1" kind="altera_eth_tse" version="20.1" enabled="1">
   <parameter name="AUTO_DEVICE" value="EP4CE115F29C7" />
   <parameter name="AUTO_DEVICE_SPEEDGRADE" value="7" />
   <parameter name="XCVR_RCFG_JTAG_ENABLE" value="0" />
@@ -336,9 +445,27 @@
    kind="avalon"
    version="20.1"
    start="vexriscv.dBusAvalon"
+   end="load_generator.bus_agent">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80006000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="vexriscv.dBusAvalon"
    end="mac_0.control_port">
   <parameter name="arbitrationPriority" value="1" />
   <parameter name="baseAddress" value="0x80003000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="vexriscv.dBusAvalon"
+   end="mac_1.control_port">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80005000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection
@@ -363,9 +490,27 @@
    kind="avalon"
    version="20.1"
    start="jtag_master.master"
+   end="load_generator.bus_agent">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80006000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="jtag_master.master"
    end="mac_0.control_port">
   <parameter name="arbitrationPriority" value="1" />
   <parameter name="baseAddress" value="0x80003000" />
+  <parameter name="defaultConnection" value="false" />
+ </connection>
+ <connection
+   kind="avalon"
+   version="20.1"
+   start="jtag_master.master"
+   end="mac_1.control_port">
+  <parameter name="arbitrationPriority" value="1" />
+  <parameter name="baseAddress" value="0x80005000" />
   <parameter name="defaultConnection" value="false" />
  </connection>
  <connection
@@ -385,14 +530,29 @@
  <connection
    kind="avalon_streaming"
    version="20.1"
+   start="mac_1.receive"
+   end="load_generator.rx_avalonst" />
+ <connection
+   kind="avalon_streaming"
+   version="20.1"
    start="dataplane.tx_avalonst"
    end="mac_0.transmit" />
+ <connection
+   kind="avalon_streaming"
+   version="20.1"
+   start="load_generator.tx_avalonst"
+   end="mac_1.transmit" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="jtag_master.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="vexriscv.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="jtag_uart.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="riscv_mtime.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="gpio_ctrl.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="dataplane.clk" />
+ <connection
+   kind="clock"
+   version="20.1"
+   start="sys_clk.clk"
+   end="load_generator.clk" />
  <connection kind="clock" version="20.1" start="sys_clk.clk" end="onchip_ram.clk1" />
  <connection
    kind="clock"
@@ -403,12 +563,27 @@
    kind="clock"
    version="20.1"
    start="sys_clk.clk"
+   end="mac_1.control_port_clock_connection" />
+ <connection
+   kind="clock"
+   version="20.1"
+   start="sys_clk.clk"
    end="mac_0.receive_clock_connection" />
  <connection
    kind="clock"
    version="20.1"
    start="sys_clk.clk"
+   end="mac_1.receive_clock_connection" />
+ <connection
+   kind="clock"
+   version="20.1"
+   start="sys_clk.clk"
    end="mac_0.transmit_clock_connection" />
+ <connection
+   kind="clock"
+   version="20.1"
+   start="sys_clk.clk"
+   end="mac_1.transmit_clock_connection" />
  <connection
    kind="conduit"
    version="20.1"
@@ -454,12 +629,22 @@
    kind="reset"
    version="20.1"
    start="sys_clk.clk_reset"
+   end="load_generator.reset" />
+ <connection
+   kind="reset"
+   version="20.1"
+   start="sys_clk.clk_reset"
    end="onchip_ram.reset1" />
  <connection
    kind="reset"
    version="20.1"
    start="sys_clk.clk_reset"
    end="mac_0.reset_connection" />
+ <connection
+   kind="reset"
+   version="20.1"
+   start="sys_clk.clk_reset"
+   end="mac_1.reset_connection" />
  <interconnectRequirement for="$system" name="qsys_mm.clockCrossingAdapter" value="HANDSHAKE" />
  <interconnectRequirement for="$system" name="qsys_mm.enableEccProtection" value="FALSE" />
  <interconnectRequirement for="$system" name="qsys_mm.insertDefaultSlave" value="FALSE" />

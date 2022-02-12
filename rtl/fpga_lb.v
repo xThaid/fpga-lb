@@ -61,6 +61,7 @@ module fpga_lb(
   wire sys_rst, sys_rst_n;
 
   wire mdio0_in, mdio0_out, mdio0_oen;
+  wire mdio1_in, mdio1_out, mdio1_oen;
 
   assign tx_clk = clk_125;
 
@@ -69,6 +70,12 @@ module fpga_lb(
   
   assign ENET0_GTX_CLK = tx_clk;
   assign ENET0_RST_N = pll_rst_locked;
+
+  assign mdio1_in = ENET1_MDIO;
+  assign ENET1_MDIO = mdio1_oen ? 1'bz : mdio1_out;
+  
+  assign ENET1_GTX_CLK = tx_clk;
+  assign ENET1_RST_N = pll_rst_locked;
 
   pll pll_0 (
     .areset (pll_rst),
@@ -114,6 +121,32 @@ module fpga_lb(
     .mac_0_misc_ff_rx_dsav    (),
     .mac_0_misc_ff_rx_a_full  (),
     .mac_0_misc_ff_rx_a_empty (),
+
+    .mac_1_mdio_mdc           (ENET1_MDC),
+    .mac_1_mdio_mdio_in       (mdio1_in),
+    .mac_1_mdio_mdio_out      (mdio1_out),
+    .mac_1_mdio_mdio_oen      (mdio1_oen),
+    .mac_1_pcs_rx_clk_clk     (ENET1_RX_CLK),
+    .mac_1_pcs_tx_clk_clk     (tx_clk),
+    .mac_1_rgmii_rgmii_in     (ENET1_RX_DATA),
+    .mac_1_rgmii_rgmii_out    (ENET1_TX_DATA),
+    .mac_1_rgmii_rx_control   (ENET1_RX_DV),
+    .mac_1_rgmii_tx_control   (ENET1_TX_EN),
+    .mac_1_status_set_10      (1'b0),
+    .mac_1_status_set_1000    (1'b0),
+    .mac_1_status_eth_mode    (),
+    .mac_1_status_ena_10      (),
+    .mac_1_misc_ff_tx_crc_fwd (),
+    .mac_1_misc_ff_tx_septy   (),
+    .mac_1_misc_tx_ff_uflow   (),
+    .mac_1_misc_ff_tx_a_full  (),
+    .mac_1_misc_ff_tx_a_empty (),
+    .mac_1_misc_rx_err_stat   (),
+    .mac_1_misc_rx_frm_type   (),
+    .mac_1_misc_ff_rx_dsav    (),
+    .mac_1_misc_ff_rx_a_full  (),
+    .mac_1_misc_ff_rx_a_empty (),
+
     .reset_reset_n            (pll_rst_locked),
     .gpio_ledr                (LEDR),
     .gpio_ledg                (LEDG),
