@@ -1,0 +1,59 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Sat Feb 12 16:06:09 2022
+[*]
+[dumpfile] "(null)"
+[savefile] "/home/thaid/Documents/uni/fall21/fpga/fpga-lb/hardcaml/test/res/load_generator.gtkw"
+[timestart] 0
+[size] 1920 1023
+[pos] -1 -1
+*-6.000000 37 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 407
+[signals_width] 380
+[sst_expanded] 1
+[sst_vpaned_height] 183
+@28
+inputs.clock
+@200
+-
+@22
+inputs.rx_data[31:0]
+@28
+inputs.rx_empty[1:0]
+inputs.rx_endofpacket
+inputs.rx_valid
+outputs.rx_ready
+@200
+-
+@22
+[color] 1
+outputs.tx_data[31:0]
+@28
+[color] 1
+outputs.tx_empty[1:0]
+[color] 1
+outputs.tx_endofpacket
+[color] 1
+outputs.tx_startofpacket
+[color] 1
+outputs.tx_valid
+[color] 1
+inputs.tx_ready
+@200
+-
+-
+@28
+inputs.bus_write
+@22
+inputs.bus_writedata[31:0]
+outputs.bus_readdata[31:0]
+@28
+outputs.bus_waitrequest
+@22
+inputs.bus_address[7:0]
+@200
+-
+-
+-
+[pattern_trace] 1
+[pattern_trace] 0
