@@ -53,7 +53,7 @@ module fpga_lb(
   output              ENET1_TX_EN
 );
 
-  wire sys_clk, clk_125, clk_25, clk_2m5;
+  wire sys_clk, clk_125, dataplane_clk, clk_2m5;
   wire tx_clk;
 
   wire pll_rst = ~KEY[3];
@@ -82,7 +82,7 @@ module fpga_lb(
     .inclk0 (CLOCK_50),
     .c0     (sys_clk),
     .c1     (clk_125),
-    .c2     (clk_25),
+    .c2     (dataplane_clk),
     .c3     (clk_2m5),
     .locked (pll_rst_locked)
   );
@@ -97,6 +97,11 @@ module fpga_lb(
 
   lb_system u0 (
     .clk_clk                  (sys_clk),
+    .reset_reset_n            (pll_rst_locked),
+
+    .dataplane_clk_clk        (dataplane_clk),
+    .dataplane_reset_reset_n  (pll_rst_locked),
+
     .mac_0_mdio_mdc           (ENET0_MDC),
     .mac_0_mdio_mdio_in       (mdio0_in),
     .mac_0_mdio_mdio_out      (mdio0_out),
@@ -147,7 +152,6 @@ module fpga_lb(
     .mac_1_misc_ff_rx_a_full  (),
     .mac_1_misc_ff_rx_a_empty (),
 
-    .reset_reset_n            (pll_rst_locked),
     .gpio_ledr                (LEDR),
     .gpio_ledg                (LEDG),
     .gpio_seven_seg           ({HEX0, HEX1, HEX2, HEX3, HEX4, HEX5, HEX6, HEX7})
