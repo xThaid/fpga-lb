@@ -66,7 +66,7 @@ let%expect_test "load_generator" =
   Sim.cycle_n sim 20;
 
   enable_generator false;
-  Sim.cycle_n sim 20;
+  Sim.cycle_n sim 100;
   write_bus 5 "00000010";
   write_bus 6 "00000020";
   enable_generator true;
@@ -77,6 +77,10 @@ let%expect_test "load_generator" =
   write_bus 6 "00000001";
   Sim.cycle_n sim 100;
   write_bus 5 "00000080";
+
+  Sim.cycle_n sim 200;
+
+  enable_generator false;
 
   Sim.cycle_n sim 200;
 
@@ -101,5 +105,5 @@ let%expect_test "load_generator" =
   Consumer.expect_data_digest consumer;
 
   [%expect {|
-    ((pkt_cnt 22) (bytes_cnt 1624))
-    (digest 53cef8226d865cad9d9c3defe9af9f40) |}]
+    ((pkt_cnt 26) (bytes_cnt 1944))
+    (digest f7951c2a2c9dbcfe6f952dd344514a2d) |}]

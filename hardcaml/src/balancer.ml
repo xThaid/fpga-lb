@@ -220,7 +220,7 @@ let create
   VIP_map.QueryPort.Response.drop encap_flow.hdr;
 
   let encap_flow = 
-    Flow.Base.pipe_source spec encap_flow.flow |> Flow.Base.pipe_source spec
+    Flow.Base.pipe_source spec encap_flow.flow |> Flow.Base.bufferize spec
   in
 
   let pkt_info = Transaction.filter_map2 (module PacketInfoTst) (module VIP_map.QueryPort.Response) (module PacketInfoTst)
@@ -263,7 +263,6 @@ let create
       ; dst_ip = resp.real_ip
       }
     ) |>
-    IPv4_hdr.map_comb ~f:(fun hdr -> {hdr with hdr_checksum = Ip.calc_checksum (module Signal) hdr}) |>
     IPv4_hdr.bufferize spec
   in
 

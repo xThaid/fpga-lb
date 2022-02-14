@@ -40,10 +40,13 @@ let create
   let stats = Data.Of_always.reg spec in
 
   IPv4_hdr.apply ip_hdr ~f:(fun ~valid ~data ->
+    let valid_d = reg spec valid in
+    let pkt_len_d = reg spec data.total_length in
+
     Always.(compile [
-      when_ valid [
+      when_ valid_d [
         stats.pkt_cnt <-- stats.pkt_cnt.value +:. 1;
-        stats.bytes_cnt <-- stats.bytes_cnt.value +: (uresize data.total_length 48)
+        stats.bytes_cnt <-- stats.bytes_cnt.value +: (uresize pkt_len_d 48)
       ]
     ]);
 

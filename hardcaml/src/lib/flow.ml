@@ -688,7 +688,7 @@ module With_header (Data : Interface.S) = struct
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
     let f1 = Serializer.serialize spec flow.hdr in
-    Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow
+    Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow |> Base.bufferize spec
 
   let arbitrate spec sources =
     let open Signal in
@@ -760,7 +760,6 @@ module With_header (Data : Interface.S) = struct
       List.mapi ~f:(fun i sink -> gate ~enable:(bit sel_onehot.value i) sink)
     in
 
-    (* TODO: perhaps bufferize sinks? *)
     sinks
 
   let filter spec source ~f = 

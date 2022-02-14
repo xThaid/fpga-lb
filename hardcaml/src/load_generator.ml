@@ -86,7 +86,7 @@ let payload_generator spec payload_len =
 
   let payload_words = srl payload_len 2 in
 
-  let total_pkt_cnt = Always.Variable.reg spec ~width:32 in
+  let total_pkt_cnt = Always.Variable.reg spec ~width:16 in
   let word_cnt = Always.Variable.reg spec ~width:16 in
 
   let flow = Flow.Base.create_wires () in
@@ -100,7 +100,7 @@ let payload_generator spec payload_len =
     ] []
   ]);
 
-  flow.s.data.data <== mux2 (word_cnt.value ==:. 0) total_pkt_cnt.value (uresize word_cnt.value 32);
+  flow.s.data.data <== uresize (mux2 (word_cnt.value ==:. 0) total_pkt_cnt.value word_cnt.value) 32;
   flow.s.data.empty <== zero 2;
   flow.s.data.last <== (word_cnt.value >=: (payload_words -:. 1));
   flow.s.valid <== vdd;
@@ -110,7 +110,10 @@ let payload_generator spec payload_len =
 let load_generator spec (config : Signal.t Config.Data.t) =
   let open Signal in
 
-  let timer_tick = Timer.create 32 spec ~enable:config.flags.enabled ~top:config.tx_period in
+  let timer_tick = 
+    Timer.create 32 spec ~enable:config.flags.enabled ~top:config.tx_period |>
+    Timer.Tick.bufferize spec
+  in
 
   let tick_to_ip, tick_to_udp = Timer.Tick.fork timer_tick in 
 
@@ -149,7 +152,6 @@ let load_generator spec (config : Signal.t Config.Data.t) =
       ; dst_ip = config.dst_ip
       }
       ) |>
-    Ip_hdr.map_comb ~f:(fun hdr -> {hdr with hdr_checksum = Ip.calc_checksum (module Signal) hdr}) |>
     Ip_hdr.bufferize spec
   in
 
@@ -161,8 +163,12 @@ let create
       ~(rx : Flow.Base.t)
       ~(tx : Flow.Base.t)
       ~(bus : BusAgent.t) =
-  let rx_eth = Eth_flow.from_flow spec rx in
-  let rx_eth_arp = Eth_flow.filter spec rx_eth ~f:(fun eth -> Signal.(eth.ether_type ==:. 0x0806)) in
+
+  let rx_eth_arp = 
+    Eth_flow.from_flow spec rx |>
+    Eth_flow.filter spec ~f:(fun eth -> Signal.(eth.ether_type ==:. 0x0806)) |>
+    Eth_flow.bufferize spec
+  in
 
   let config, config_bus = Config.create spec in
 

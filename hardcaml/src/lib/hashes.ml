@@ -45,15 +45,28 @@ let crc32 (type a) (module B : Comb.S with type t = a) state_in data_in =
   ) in
   B.concat_lsb state_out_bits
 
+let add1c16b (type a) (module B : Comb.S with type t = a) a b =
+  let open B in
+
+  let sum = (uresize a 17) +: (uresize b 17) in
+  let sum = (sel_bottom sum 16) +: (uresize (bit sum 16) 16) in
+  sum
+  
+
 let one_complement_sum (type a) (module B : Comb.S with type t = a) data =
   let open B in
 
-  let add1c16b a b =
-    let sum = (uresize a 17) +: (uresize b 17) in
-    let sum = (sel_bottom sum 16) +: (uresize (bit sum 16) 16) in
-    sum
-  in
-
   let dwords = split_lsb ~exact:true ~part_width:16 data in
 
-  ~:(tree ~arity:2 ~f:(reduce ~f:add1c16b) dwords)
+  ~:(tree ~arity:2 ~f:(reduce ~f:(add1c16b (module B))) dwords)
+
+  let one_complement_sum_pipeline spec data enable =
+    let open Signal in
+  
+    let dwords = split_lsb ~exact:true ~part_width:16 data in
+
+    let pipeline_out = 
+      Hardcaml_circuits.Pipelined_tree_reduce.create ~f:(add1c16b (module Signal)) ~enable ~arity:2 spec dwords
+    in
+  
+    {With_valid.valid = pipeline_out.valid; value = ~:(pipeline_out.value)}

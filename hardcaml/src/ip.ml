@@ -41,6 +41,35 @@ let calc_checksum (type a) (module B : Comb.S with type t = a) ipv4_hdr =
   let module IPv4_comb = Common.IPv4Header.Make_comb(B) in
   Hashes.one_complement_sum (module B) (IPv4_comb.pack ~rev:true ipv4_hdr)
 
+let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) = 
+  let open Signal in
+
+  let ipv4_hdr1, ipv4_hdr2 = IPv4_hdr.fork ipv4_hdr in
+  let ipv4_hdr1 = IPv4_hdr.pipe_source spec ipv4_hdr1 in
+
+  let module Checksum = struct
+    type 'a t =
+      { checksum : 'a [@bits 16]
+      }
+    [@@deriving sexp_of, hardcaml]
+  end in
+  let module ChecksumTst = Transaction.Make(Checksum) in
+  let checksum_out = ChecksumTst.create_wires () in
+
+  IPv4_hdr.apply ipv4_hdr2 ~f:(fun ~valid ~data -> 
+    let packed = Common.IPv4Header.Of_signal.pack ~rev:true data in
+    let checksum = Hashes.one_complement_sum_pipeline spec packed valid in
+
+    checksum_out.s.valid <== checksum.valid;
+    checksum_out.s.data.checksum <== checksum.value;
+
+    checksum_out.d.ready
+  );
+  
+  Transaction.map2 (module IPv4_hdr) (module ChecksumTst) (module IPv4_hdr) ipv4_hdr1 (ChecksumTst.pipe_source spec checksum_out)
+    ~f:(fun hdr chksum -> {hdr with hdr_checksum = chksum.checksum}) |>
+  IPv4_hdr.bufferize spec
+
 let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cfg : Signal.t Config.t) =
   let open Signal in
 
@@ -51,13 +80,13 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cf
 
   let ip_flow = 
     Flow.Base.pipe_source spec ip_rx.flow |>
-    Flow.Base.pipe_source spec
+    Flow.Base.pipe_source spec |>
+    Flow.Base.bufferize spec
   in
 
   let ip_hdr = 
-    IPv4_hdr.map_comb ip_hdr ~f:(fun data -> { data with hdr_checksum = zero 16}) |> 
-    IPv4_hdr.map_comb ~f:(fun data -> { data with hdr_checksum = calc_checksum (module Signal) data}) |>
-    IPv4_hdr.pipe_source spec
+    IPv4_hdr.map_comb ip_hdr ~f:(fun data -> { data with hdr_checksum = zero 16}) |>
+    pipline_checksum_calculation spec
   in
 
   let module WithArpResp = Transaction.Of_pair(Arp.Table.QueryPort.ResponseData)(Common.IPv4Header) in
