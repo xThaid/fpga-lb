@@ -43,15 +43,15 @@ RUN rm -rf /tmp/riscv_toolchain
 RUN addgroup --gid $GROUP_ID user
 RUN adduser --disabled-password --gecos '' --uid $USER_ID --gid $GROUP_ID user
 
-# Hardcaml
-COPY install_hardcaml.sh /tmp/hardcaml/
-RUN cd /tmp/hardcaml && ./install_hardcaml.sh
-RUN rm -rf /tmp/hardcaml
-
 # OpenOCD for VexRiscv
 COPY install_openocd_vex.sh /tmp/openocd_vex/
 RUN cd /tmp/openocd_vex && ./install_openocd_vex.sh
 RUN rm -rf /tmp/openocd_vex
+
+# Hardcaml
+COPY install_hardcaml.sh /tmp/hardcaml/
+RUN cd /tmp/hardcaml && ./install_hardcaml.sh
+RUN rm -rf /tmp/hardcaml
 
 USER user
 
