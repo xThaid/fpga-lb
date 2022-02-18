@@ -20,7 +20,7 @@ module I = struct
     ; eth_tx : 'a Eth_flow.Dst.t
     ; ip_rx : 'a IPv4_flow.Src.t
     ; ip_tx : 'a IPv4_flow.Dst.t
-    ; arp_query : 'a Arp.Table.QueryPort.O.t
+    ; arp_query : 'a Arp.Table.ReadPort.O.t
     ; config : 'a Config.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -32,7 +32,7 @@ module O = struct
     ; eth_tx : 'a Eth_flow.Src.t
     ; ip_rx : 'a IPv4_flow.Dst.t
     ; ip_tx : 'a IPv4_flow.Src.t
-    ; arp_query : 'a Arp.Table.QueryPort.I.t
+    ; arp_query : 'a Arp.Table.ReadPort.I.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -70,13 +70,13 @@ let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) =
     ~f:(fun hdr chksum -> {hdr with hdr_checksum = chksum.checksum}) |>
   IPv4_hdr.bufferize spec
 
-let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cfg : Signal.t Config.t) =
+let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) ~(cfg : Signal.t Config.t) =
   let open Signal in
 
-  let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.QueryPort.Request) ip_rx.hdr
+  let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.ReadPort.Request) ip_rx.hdr
     ~f:(fun hdr -> {Arp.Table.Key.ip = hdr.dst_ip})
   in
-  Arp.Table.QueryPort.Request.connect arp_query.req arp_query_req;
+  Arp.Table.ReadPort.Request.connect arp_query.req arp_query_req;
 
   let ip_flow = 
     Flow.Base.pipe_source spec ip_rx.flow |>
@@ -89,7 +89,7 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.QueryPort.t) ~(cf
     pipline_checksum_calculation spec
   in
 
-  let module WithArpResp = Transaction.Of_pair(Arp.Table.QueryPort.ResponseData)(Common.IPv4Header) in
+  let module WithArpResp = Transaction.Of_pair(Arp.Table.ReadPort.ResponseData)(Common.IPv4Header) in
   let module WithArpRespFlow = Flow.With_header(WithArpResp.Data) in
 
   let flow_with_arp_resp = 
@@ -116,7 +116,7 @@ let create
       spec
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
-      ~(arp_query : Arp.Table.QueryPort.t) 
+      ~(arp_query : Arp.Table.ReadPort.t) 
       ~(cfg : Signal.t Config.t) =
 
   let eth_tx = egress spec ~ip_rx ~arp_query ~cfg in
@@ -133,7 +133,7 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
   let eth_tx = Eth_flow.t_of_if o.eth_tx i.eth_tx in
   let ip_rx = IPv4_flow.t_of_if i.ip_rx o.ip_rx in
   let ip_tx = IPv4_flow.t_of_if o.ip_tx i.ip_tx in
-  let arp_query = Arp.Table.QueryPort.t_of_if o.arp_query i.arp_query in
+  let arp_query = Arp.Table.ReadPort.t_of_if o.arp_query i.arp_query in
 
   let eth_tx2, ip_tx2 = create scope spec ~eth_rx ~ip_rx ~arp_query ~cfg:i.config in
 
@@ -145,7 +145,7 @@ let hierarchical
       spec
       ~(eth_rx : Eth_flow.t)
       ~(ip_rx : IPv4_flow.t) 
-      ~(arp_query : Arp.Table.QueryPort.t)
+      ~(arp_query : Arp.Table.ReadPort.t)
       ~(cfg : Signal.t Config.t)
       =
   let module H = Hierarchy.In_scope(I)(O) in
@@ -162,7 +162,7 @@ let hierarchical
   let ip_rx_i, ip_rx_o = IPv4_flow.if_of_t ip_rx in
   let ip_tx_i, ip_tx_o = IPv4_flow.if_of_t ip_tx in
 
-  let arp_query_i, arp_query_o = Arp.Table.QueryPort.if_of_t arp_query in
+  let arp_query_i, arp_query_o = Arp.Table.ReadPort.if_of_t arp_query in
 
   let i = {I.clock; clear; eth_rx = eth_rx_i; eth_tx = eth_tx_o; ip_rx = ip_rx_i; ip_tx = ip_tx_o; arp_query = arp_query_o; config = cfg} in
   let o = {O.eth_rx = eth_rx_o; eth_tx = eth_tx_i; ip_rx = ip_rx_o; ip_tx = ip_tx_i; arp_query = arp_query_i} in

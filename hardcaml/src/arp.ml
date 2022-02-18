@@ -5,6 +5,10 @@ module EthTst = Transaction.Make(Common.EthernetHeader)
 module EthArpTst = Transaction.Of_pair(Common.EthernetHeader)(Common.ArpPacket)
 
 module Table = struct
+  module Desc = struct
+    let capacity = 32
+  end
+
   module Key = struct
     type 'a t =
       { ip : 'a [@bits 32]
@@ -19,7 +23,7 @@ module Table = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  include Container.Hashtbl(Key)(Data)
+  include Memory.Hashtbl(Desc)(Key)(Data)
 end
 
 module RequestData = struct
@@ -45,7 +49,7 @@ module I = struct
     ; clear : 'a
     ; rx : 'a Eth_flow.Src.t
     ; tx : 'a Eth_flow.Dst.t
-    ; query : 'a Table.QueryPort.I.t
+    ; read : 'a Table.ReadPort.I.t
     ; on_arp_req : 'a OnArpRequest.Dst.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -55,7 +59,7 @@ module O = struct
   type 'a t = 
     { rx : 'a Eth_flow.Dst.t 
     ; tx : 'a Eth_flow.Src.t
-    ; query : 'a Table.QueryPort.O.t
+    ; read : 'a Table.ReadPort.O.t
     ; on_arp_req : 'a OnArpRequest.Src.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -117,14 +121,14 @@ let create
       spec
       ~(rx : Eth_flow.t)
       ~(tx : Eth_flow.t)
-      ~(query : Table.QueryPort.t) 
+      ~(query : Table.ReadPort.t) 
       ~(on_arp_req : OnArpRequest.t)
       =
   
   let table_write_port = Table.WritePort.create_wires () in
   
-  Table.hierarchical ~name:"arp_table" ~capacity:32 scope spec ~query_port:query ~write_port:table_write_port;
-  
+  Table.hierarchical ~name:"arp_table" scope spec ~read_port:query ~write_port:table_write_port;
+
   Eth_flow.connect tx (datapath spec ~rx table_write_port ~on_arp_req)
 
 let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
@@ -132,7 +136,7 @@ let create_from_if (scope : Scope.t) (i : Signal.t I.t) (o : Signal.t O.t) =
 
   let rx = Eth_flow.t_of_if i.rx o.rx in
   let tx = Eth_flow.t_of_if o.tx i.tx in
-  let query = Table.QueryPort.t_of_if i.query o.query in
+  let query = Table.ReadPort.t_of_if i.read o.read in
   let on_arp_req = OnArpRequest.t_of_if o.on_arp_req i.on_arp_req in
 
   create scope spec ~rx ~tx ~query ~on_arp_req
@@ -148,15 +152,15 @@ let hierarchical
   let clear = Reg_spec.clear spec in
 
   let tx = Eth_flow.create_wires () in
-  let query = Table.QueryPort.create_wires () in
+  let read = Table.ReadPort.create_wires () in
 
   let rx_i, rx_o = Eth_flow.if_of_t rx in
   let tx_i, tx_o = Eth_flow.if_of_t tx in
-  let query_i, query_o = Table.QueryPort.if_of_t query in
+  let read_i, read_o = Table.ReadPort.if_of_t read in
   let arp_req_s, arp_req_d = OnArpRequest.if_of_t on_arp_req in
 
-  let i = {I.clock; clear; rx = rx_i; tx = tx_o; query = query_i; on_arp_req = arp_req_d} in
-  let o = {O.rx = rx_o; tx = tx_i; query = query_o; on_arp_req = arp_req_s} in
+  let i = {I.clock; clear; rx = rx_i; tx = tx_o; read = read_i; on_arp_req = arp_req_d} in
+  let o = {O.rx = rx_o; tx = tx_i; read = read_o; on_arp_req = arp_req_s} in
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) = 
     let o = O.Of_signal.wires () in create_from_if scope i o; o
@@ -165,4 +169,4 @@ let hierarchical
   let o2 = H.hierarchical ~scope ~name:"arp" create_fn i in
   O.Of_signal.assign o o2;
 
-  tx, query
+  tx, read

@@ -314,6 +314,19 @@ let fork_map (type from_t) (type to_t) (type from_dt) (type to_dt)
   let tst1, tst2 = From.fork tst in
   tst1, map (module From) (module To) tst2 ~f
   
+let filter_map (type from_t) (type to_t) (type from_dt) (type to_dt)
+      (module From : S with type t = from_t and type data_type = from_dt)
+      (module To : S with type t = to_t and type data_type = to_dt)
+      (t : from_t)
+      ~f =
+  let open Signal in
+
+  let new_data, filter = f (From.data t) in
+
+  let out = To.create ~valid:((From.valid t) &: filter) ~data:new_data in
+  assign (From.ready t) (To.ready out);
+  out
+
 let filter_map2 (type from1_t) (type from2_t) (type to_t) (type from1_dt) (type from2_dt) (type to_dt)
       (module From1 : S with type t = from1_t and type data_type = from1_dt)
       (module From2 : S with type t = from2_t and type data_type = from2_dt)

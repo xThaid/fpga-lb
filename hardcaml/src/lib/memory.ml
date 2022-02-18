@@ -1,3 +1,5 @@
+(** Memories wrapped with dataflow interface. *)
+
 open Base
 open Hardcaml
 
@@ -5,11 +7,14 @@ module type RamDesc = sig
   val capacity : int
 end
 
+(** A simple RAM that is accessed with request & response transactions. *)
 module Ram (Desc : RamDesc) (Data : Interface.S) = struct
+  let addr_width = Bits.address_bits_for Desc.capacity
+
   module ReadPort = struct
     module RequestData = struct
       type 'a t =
-        { address : 'a [@bits Bits.address_bits_for Desc.capacity]
+        { address : 'a [@bits addr_width]
         }
       [@@deriving sexp_of, hardcaml]
     end
@@ -56,7 +61,7 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
   module WritePort = struct
     module Data = struct
       type 'a t =
-        { address : 'a [@bits Bits.address_bits_for Desc.capacity]
+        { address : 'a [@bits addr_width]
         ; data : 'a Data.t
         }
       [@@deriving sexp_of, hardcaml]
@@ -140,8 +145,6 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
   
   let create (scope : Scope.t) (input : Signal.t I.t) =
     let spec = Reg_spec.create ~clock:input.clock ~clear:input.clear () in
-  
-    let addr_width = Bits.address_bits_for Desc.capacity in
   
     let ram_read_port =
       { Signal.read_clock = input.clock
@@ -233,10 +236,10 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
     bus
 end
 
-module Hashtbl (Key : Interface.S) (Data : Interface.S) = struct
-
-  module QueryPort = struct
-
+(** Hash table without collision resolution (entries are replaced by new ones). Uses the
+    dataflow request-response pattern to access. *)
+module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struct
+  module ReadPort = struct
     module ResponseData = struct
       type 'a t =
         { data : 'a Data.t
@@ -316,7 +319,7 @@ module Hashtbl (Key : Interface.S) (Data : Interface.S) = struct
     type 'a t =
       { clock : 'a
       ; clear : 'a
-      ; query : 'a QueryPort.I.t 
+      ; query : 'a ReadPort.I.t 
       ; write : 'a WritePort.I.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -324,7 +327,7 @@ module Hashtbl (Key : Interface.S) (Data : Interface.S) = struct
   
   module O = struct
     type 'a t = 
-      { query : 'a QueryPort.O.t
+      { query : 'a ReadPort.O.t
       ; write : 'a WritePort.O.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -341,6 +344,8 @@ module Hashtbl (Key : Interface.S) (Data : Interface.S) = struct
     let len = List.fold Names_and_widths.port_widths ~init:0 ~f:(+)
   end
 
+  module Mem = Ram(Desc)(Entry)
+
   let calc_hash key = 
     let open Signal in
 
@@ -348,131 +353,91 @@ module Hashtbl (Key : Interface.S) (Data : Interface.S) = struct
     split_msb ~exact:true ~part_width:32 |>
     List.fold ~init:(ones 32) ~f:(Hashes.crc32 (module Signal))
   
-  let write_path scope spec (write_port : Signal.t WritePort.I.t) ram_write_port =
+  let write_path scope spec (write_port_in : Signal.t WritePort.I.t) mem_write_port =
     let open Signal in
     let (--) = Scope.naming scope in
   
-    let hash = calc_hash write_port.data.key -- "write_hash" in
-  
-    let entry = Entry.Of_signal.wires () in
-    let entry_d = Entry.Of_signal.reg spec entry in
-  
-    entry.valid <== vdd;
-    Key.Of_signal.assign entry.key write_port.data.key;
-    Data.Of_signal.assign entry.data write_port.data.data;
-  
-    ram_write_port.write_address <== reg spec (sel_bottom hash (width ram_write_port.write_address));
-    ram_write_port.write_enable <== reg spec write_port.valid;
-    ram_write_port.write_data <== Entry.Of_signal.pack entry_d;
-
     let write_port_out = WritePort.O.Of_signal.wires () in
-    write_port_out.ready <== vdd;
+    let write_port = WritePort.t_of_if write_port_in write_port_out in
+
+    Transaction.map (module WritePort.Request) (module Mem.WritePort.Request)
+      write_port ~f:(fun data ->
+        let hash = calc_hash data.key -- "write_hash" in
+        let addr = sel_bottom hash Mem.addr_width in
+
+        let entry = 
+          { Entry.valid = vdd
+          ; key = data.key
+          ; data = data.data
+          }
+        in
+
+        { Mem.WritePort.Data.address = addr; data = entry }
+      ) |>
+    Mem.WritePort.Request.pipe_source spec |>
+    Mem.WritePort.Request.connect mem_write_port;
+
     write_port_out
   
-  let query_path scope spec (read_port_in : Signal.t QueryPort.I.t) ram_read_port ram_read_data = 
+  let read_path scope spec (read_port_in : Signal.t ReadPort.I.t) (mem_read_port : Mem.ReadPort.t) = 
     let open Signal in
     let (--) = Scope.naming scope in
-  
-    let hash = calc_hash read_port_in.req.data -- "query_hash" in
-  
-    let read_port_out = QueryPort.O.Of_signal.wires () in
-  
-    let entry = Entry.Of_signal.unpack ram_read_data in
-  
-    let stored_q_valid = Always.Variable.reg spec ~width:1 in
-    let resp_valid = Always.Variable.reg spec ~width:1 in
-  
-    let stall_second_stage = resp_valid.value &: ((~:) read_port_in.resp.ready) in
-    let stall_first_stage = stored_q_valid.value &: stall_second_stage in
-  
-    let store_query = read_port_in.req.valid &: ((~:) stall_first_stage) in
-    let process_query = stored_q_valid.value &: ((~:) stall_second_stage) in
-  
-    let stored_key = Key.Of_signal.reg spec ~enable:store_query read_port_in.req.data in
-    let stored_hash = reg spec ~enable:store_query hash in
-  
-    let processed_key = Key.Of_signal.reg spec ~enable:process_query stored_key in
-  
-    Always.(compile [
-      if_ store_query [
-        stored_q_valid <--. 1;
-      ] @@ elif process_query [
-        stored_q_valid <--. 0;
-      ] [];
-  
-      if_ process_query [
-        resp_valid <--. 1;
-      ] @@ elif read_port_in.resp.ready [
-        resp_valid <--. 0;
-      ] [];
-    ]);
-  
-    ram_read_port.read_address <== (sel_bottom stored_hash (width ram_read_port.read_address));
-    ram_read_port.read_enable <== process_query;
-  
-    Data.Of_signal.assign read_port_out.resp.data.data entry.data;
-    read_port_out.resp.valid <== resp_valid.value;
 
-    read_port_out.resp.data.found <== (entry.valid &: (Key.Of_signal.pack entry.key ==: Key.Of_signal.pack processed_key));
-  
-    read_port_out.req.ready <== ((~:) stall_first_stage);
+    let read_port_out = ReadPort.O.Of_signal.wires () in
+    let read_port = ReadPort.t_of_if read_port_in read_port_out in
+
+    let req, req_cpy = ReadPort.Request.fork read_port.req in
+    let req_cpy = ReadPort.Request.pipe_source spec req_cpy |> ReadPort.Request.pipe_source spec in
+
+    Transaction.map (module ReadPort.Request) (module Mem.ReadPort.Request)
+      req ~f:(fun key ->
+        let hash = calc_hash key -- "read_hash" in
+        { Mem.ReadPort.RequestData.address = sel_bottom hash Mem.addr_width}
+      ) |>
+    Mem.ReadPort.Request.pipe_source spec |>
+    Mem.ReadPort.Request.connect mem_read_port.req;
+
+    Transaction.map2 (module ReadPort.Request) (module Mem.ReadPort.Response) (module ReadPort.Response)
+      req_cpy mem_read_port.resp ~f:(fun req resp ->
+        { ReadPort.ResponseData.found = resp.valid &: (Key.Of_signal.pack resp.key ==: Key.Of_signal.pack req)
+        ; data = resp.data
+        }
+      ) |>
+    ReadPort.Response.connect read_port.resp;
   
     read_port_out
   
-  let create ~capacity (scope : Scope.t) (input : Signal.t I.t) =
+  let create (scope : Scope.t) (input : Signal.t I.t) =
     let spec = Reg_spec.create ~clock:input.clock ~clear:input.clear () in
+    
+    let mem_read_port = Mem.ReadPort.create_wires () in
+    let mem_write_port = Mem.WritePort.create_wires () in
+
+    Mem.hierarchical ~name:"mem" scope spec ~read_port:mem_read_port ~write_port:mem_write_port;
   
-    let addr_width = Bits.address_bits_for capacity in
-  
-    let ram_read_port =
-      { Signal.read_clock = input.clock
-      ; read_address = Signal.wire addr_width
-      ; read_enable = Signal.wire 1
-      }
-    in
-  
-    let ram_write_port =
-      { Signal.write_clock = input.clock
-      ; write_address = Signal.wire addr_width
-      ; write_enable = Signal.wire 1
-      ; write_data = Signal.wire Entry.len
-      }
-    in
-  
-    let ram =
-      Hardcaml.Ram.create
-        ~name:(Scope.name scope "hashtbl_mem")
-        ~collision_mode:Read_before_write
-        ~size:capacity
-        ~write_ports:[|ram_write_port|]
-        ~read_ports:[|ram_read_port|]
-        ()
-    in
-  
-    let write_port_out = write_path scope spec input.write ram_write_port in 
-    let read_port_out = query_path scope spec input.query ram_read_port (Array.get ram 0) in
+    let write_port_out = write_path scope spec input.write mem_write_port in 
+    let read_port_out = read_path scope spec input.query mem_read_port in
   
     {O.query = read_port_out; write = write_port_out}
   
   let hierarchical
         ~name
-        ~capacity
         (scope : Scope.t)
         spec
-        ~(query_port : QueryPort.t)
+        ~(read_port : ReadPort.t)
         ~(write_port : WritePort.t) =
     let module H = Hierarchy.In_scope(I)(O) in
   
     let clock = Reg_spec.clock spec in
     let clear = Reg_spec.clear spec in
   
-    let qp_i, qp_o = QueryPort.if_of_t query_port in
+    let rp_i, rp_o = ReadPort.if_of_t read_port in
     let wp_i, wp_o = WritePort.if_of_t write_port in
   
-    let i = {I.clock; clear; query = qp_i; write = wp_i} in
-    let o = {O.query = qp_o; write = wp_o} in
+    let i = {I.clock; clear; query = rp_i; write = wp_i} in
+    let o = {O.query = rp_o; write = wp_o} in
   
-    let o2 = H.hierarchical ~scope ~name:(name ^ "_hashtbl") (create ~capacity) i in
+    let o2 = H.hierarchical ~scope ~name:(name ^ "_hashtbl") create i in
     O.Of_signal.assign o o2;
 
 end

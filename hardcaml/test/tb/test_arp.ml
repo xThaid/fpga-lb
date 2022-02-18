@@ -9,7 +9,7 @@ module ArpTableSim = struct
   module O = Arp.Table.O
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
-    Arp.Table.create ~capacity:32 scope i
+    Arp.Table.create scope i
 
 end
 
@@ -81,7 +81,7 @@ let%expect_test "arp_table" =
 
   Sim.expect_trace_digest sim;
 
-  [%expect {| f1ab05e02ca13f52c53aa1c8ce2bb09c |}]
+  [%expect {| 250affc02703356227aadf450e33200d |}]
 
 module ArpSim = struct
   module Eth_flow = Flow.With_header(Common.EthernetHeader)
@@ -92,7 +92,7 @@ module ArpSim = struct
       ; clear : 'a
       ; rx : 'a Eth_flow.Src.t
       ; tx : 'a Eth_flow.Dst.t
-      ; query : 'a Arp.Table.QueryPort.I.t
+      ; query : 'a Arp.Table.ReadPort.I.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
@@ -101,7 +101,7 @@ module ArpSim = struct
     type 'a t = 
       { rx : 'a Eth_flow.Dst.t 
       ; tx : 'a Eth_flow.Src.t
-      ; query : 'a Arp.Table.QueryPort.O.t
+      ; query : 'a Arp.Table.ReadPort.O.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
@@ -113,7 +113,7 @@ module ArpSim = struct
 
     let rx = Eth_flow.t_of_if i.rx o.rx in
     let tx = Eth_flow.t_of_if o.tx i.tx in
-    let query = Arp.Table.QueryPort.t_of_if i.query o.query in
+    let query = Arp.Table.ReadPort.t_of_if i.query o.query in
 
     let on_arp_req = Arp.OnArpRequest.create_wires () in
     Arp.OnArpRequest.Resp.connect on_arp_req.resp (Transaction.map (module Arp.OnArpRequest.Req) (module Arp.OnArpRequest.Resp)

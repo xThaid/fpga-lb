@@ -32,6 +32,10 @@ module O = struct
 end
 
 module VIP_map = struct
+  module Desc = struct
+    let capacity = Consts.max_vips
+  end
+
   module Key = struct
     type 'a t =
       { vip : 'a [@bits 32]
@@ -46,7 +50,7 @@ module VIP_map = struct
     [@@deriving sexp_of, hardcaml]
   end
 
-  include Container.Hashtbl(Key)(Data)
+  include Memory.Hashtbl(Desc)(Key)(Data)
 
   module BusAgent = Bus.Agent.Make (
       struct
@@ -108,8 +112,8 @@ module RealInfo = struct
   [@@deriving sexp_of, hardcaml]
 end
 
-module HashRings = Container.Ram(struct let capacity = Consts.max_vips * Consts.ring_size end)(HashRingEntry)
-module RealsMap = Container.Ram(struct let capacity = Consts.max_reals end)(RealInfo)
+module HashRings = Memory.Ram(struct let capacity = Consts.max_vips * Consts.ring_size end)(HashRingEntry)
+module RealsMap = Memory.Ram(struct let capacity = Consts.max_reals end)(RealInfo)
 
 module RealLookupReqData = struct
   type 'a t =
@@ -179,11 +183,11 @@ let create
   let module L4Serializer = Flow.Serializer(L4_hdr_data) in
   let l4_hdr = L4Serializer.deserialize spec ip_rx.flow in
 
-  let vip_map_query_resp = VIP_map.QueryPort.Response.create_wires () in
-  let ip_hdr, vip_map_query_req = Transaction.fork_map (module IPv4_hdr) (module VIP_map.QueryPort.Request)
+  let vip_map_query_resp = VIP_map.ReadPort.Response.create_wires () in
+  let ip_hdr, vip_map_query_req = Transaction.fork_map (module IPv4_hdr) (module VIP_map.ReadPort.Request)
     ip_rx.hdr ~f:(fun req -> { VIP_map.Key.vip = req.dst_ip }
   ) in
-  let vip_map_query = VIP_map.QueryPort.create vip_map_query_req vip_map_query_resp in
+  let vip_map_query = VIP_map.ReadPort.create vip_map_query_req vip_map_query_resp in
 
   let module PacketInfo = struct
     type 'a t =
@@ -209,21 +213,21 @@ let create
     )
   in
 
-  let vip_map_query_resp1, vip_map_query_resp2 = VIP_map.QueryPort.Response.fork vip_map_query_resp in
+  let vip_map_query_resp1, vip_map_query_resp2 = VIP_map.ReadPort.Response.fork vip_map_query_resp in
 
-  let module WithVip_mapFlow = Flow.With_header(VIP_map.QueryPort.ResponseData) in
+  let module WithVip_mapFlow = Flow.With_header(VIP_map.ReadPort.ResponseData) in
   let encap_flow =
     WithVip_mapFlow.create vip_map_query_resp1 encap_flow |> 
     WithVip_mapFlow.filter spec ~f:(fun resp -> resp.found)
   in
 
-  VIP_map.QueryPort.Response.drop encap_flow.hdr;
+  VIP_map.ReadPort.Response.drop encap_flow.hdr;
 
   let encap_flow = 
     Flow.Base.pipe_source spec encap_flow.flow |> Flow.Base.bufferize spec
   in
 
-  let pkt_info = Transaction.filter_map2 (module PacketInfoTst) (module VIP_map.QueryPort.Response) (module PacketInfoTst)
+  let pkt_info = Transaction.filter_map2 (module PacketInfoTst) (module VIP_map.ReadPort.Response) (module PacketInfoTst)
     pkt_info vip_map_query_resp2 ~f:(fun pkt vip_resp ->
       {pkt with vip_idx = vip_resp.data.vip_idx}, vip_resp.found
     )
@@ -278,7 +282,7 @@ let create
   let per_real_stats = Base.List.map ip_hdrs_by_real ~f:(fun x -> Stat.hierarchical scope spec ~ip_hdr:(IP_Real_Pair.fst x)) in
 
   let vip_map_write = VIP_map.WritePort.create_wires () in
-  VIP_map.hierarchical ~name:(Scope.name scope "vip_map") ~capacity:Consts.max_vips scope spec ~query_port:vip_map_query ~write_port:vip_map_write;
+  VIP_map.hierarchical ~name:(Scope.name scope "vip_map") scope spec ~read_port:vip_map_query ~write_port:vip_map_write;
   let vip_map_bus = VIP_map.create_bus_adapter spec vip_map_write in
 
   let hash_ring_write = HashRings.WritePort.create_wires () in
