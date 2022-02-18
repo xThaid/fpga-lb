@@ -6,6 +6,7 @@ import curses
 import intel_jtag_uart
 
 REAL_NAMES = {
+    1: "192.168.0.100",
     10: "192.168.0.230",
     11: "192.168.0.231",
     12: "192.168.0.232",
@@ -17,8 +18,8 @@ REAL_NAMES = {
 }
 
 LG_ENABLED = 1
-LG_TX_PERIOD = 25
-LG_PAYLOAD_SIZE = 1400
+LG_TX_PERIOD = 10
+LG_PAYLOAD_SIZE = 12
 
 def conv_unit(val):
     if val >= 1000000000.0:

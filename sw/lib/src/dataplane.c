@@ -12,7 +12,7 @@ void dataplane_add_vip(uint32_t vip, uint32_t idx) {
     asm volatile("" ::: "memory");
     DATAPLANE.balancer.vip_map_idx = idx;
 
-    DATAPLANE.config.vips[0] = vip;
+    DATAPLANE.config.vips[idx] = vip;
 }
 
 void dataplane_update_real(uint32_t idx, uint32_t ip) {
