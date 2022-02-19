@@ -44,8 +44,8 @@ let calc_checksum (type a) (module B : Comb.S with type t = a) ipv4_hdr =
 let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) = 
   let open Signal in
 
-  let ipv4_hdr1, ipv4_hdr2 = IPv4_hdr.fork ipv4_hdr in
-  let ipv4_hdr1 = IPv4_hdr.pipe_source spec ipv4_hdr1 in
+  let ipv4_hdr, ipv4_hdr_cpy = IPv4_hdr.fork ipv4_hdr in
+  let ipv4_hdr_cpy = IPv4_hdr.pipe_source spec ipv4_hdr_cpy in
 
   let module Checksum = struct
     type 'a t =
@@ -56,9 +56,9 @@ let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) =
   let module ChecksumTst = Transaction.Make(Checksum) in
   let checksum_out = ChecksumTst.create_wires () in
 
-  IPv4_hdr.apply ipv4_hdr2 ~f:(fun ~valid ~data -> 
+  IPv4_hdr.apply ipv4_hdr ~f:(fun ~valid ~data -> 
     let packed = Common.IPv4Header.Of_signal.pack ~rev:true data in
-    let checksum = Hashes.one_complement_sum_pipeline spec packed valid in
+    let checksum = Hashes.one_complement_sum_pipeline spec ~data:packed ~enable:valid in
 
     checksum_out.s.valid <== checksum.valid;
     checksum_out.s.data.checksum <== checksum.value;
@@ -66,7 +66,7 @@ let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) =
     checksum_out.d.ready
   );
   
-  Transaction.map2 (module IPv4_hdr) (module ChecksumTst) (module IPv4_hdr) ipv4_hdr1 (ChecksumTst.pipe_source spec checksum_out)
+  Transaction.map2 (module IPv4_hdr) (module ChecksumTst) (module IPv4_hdr) ipv4_hdr_cpy (ChecksumTst.pipe_source spec checksum_out)
     ~f:(fun hdr chksum -> {hdr with hdr_checksum = chksum.checksum}) |>
   IPv4_hdr.bufferize spec
 
