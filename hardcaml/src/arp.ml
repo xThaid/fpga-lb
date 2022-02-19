@@ -41,7 +41,7 @@ module ResponseData = struct
   [@@deriving sexp_of, hardcaml]
 end
 
-module OnArpRequest = Transaction.Two_way(RequestData)(ResponseData)
+module OnArpRequest = Transaction.Req_resp(RequestData)(ResponseData)
 
 module I = struct
   type 'a t =
@@ -49,7 +49,7 @@ module I = struct
     ; clear : 'a
     ; rx : 'a Eth_flow.Src.t
     ; tx : 'a Eth_flow.Dst.t
-    ; read : 'a Table.ReadPort.I.t
+    ; read : 'a Table.ReadPort.Src.t
     ; on_arp_req : 'a OnArpRequest.Dst.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -59,7 +59,7 @@ module O = struct
   type 'a t = 
     { rx : 'a Eth_flow.Dst.t 
     ; tx : 'a Eth_flow.Src.t
-    ; read : 'a Table.ReadPort.O.t
+    ; read : 'a Table.ReadPort.Dst.t
     ; on_arp_req : 'a OnArpRequest.Src.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]

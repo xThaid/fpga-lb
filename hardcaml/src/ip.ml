@@ -20,7 +20,7 @@ module I = struct
     ; eth_tx : 'a Eth_flow.Dst.t
     ; ip_rx : 'a IPv4_flow.Src.t
     ; ip_tx : 'a IPv4_flow.Dst.t
-    ; arp_query : 'a Arp.Table.ReadPort.O.t
+    ; arp_query : 'a Arp.Table.ReadPort.Dst.t
     ; config : 'a Config.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
@@ -32,7 +32,7 @@ module O = struct
     ; eth_tx : 'a Eth_flow.Src.t
     ; ip_rx : 'a IPv4_flow.Dst.t
     ; ip_tx : 'a IPv4_flow.Src.t
-    ; arp_query : 'a Arp.Table.ReadPort.I.t
+    ; arp_query : 'a Arp.Table.ReadPort.Src.t
     }
   [@@deriving sexp_of, hardcaml ~rtlmangle:true]
 end
@@ -73,10 +73,10 @@ let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) =
 let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) ~(cfg : Signal.t Config.t) =
   let open Signal in
 
-  let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.ReadPort.Request) ip_rx.hdr
+  let ip_hdr, arp_query_req = Transaction.fork_map (module IPv4_hdr) (module Arp.Table.ReadPort.Req) ip_rx.hdr
     ~f:(fun hdr -> {Arp.Table.Key.ip = hdr.dst_ip})
   in
-  Arp.Table.ReadPort.Request.connect arp_query.req arp_query_req;
+  Arp.Table.ReadPort.Req.connect arp_query.req arp_query_req;
 
   let ip_flow = 
     Flow.Base.pipe_source spec ip_rx.flow |>

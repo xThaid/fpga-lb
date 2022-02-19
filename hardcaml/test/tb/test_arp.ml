@@ -9,7 +9,7 @@ module ArpTableSim = struct
   module O = Arp.Table.O
 
   let create_fn (scope : Scope.t) (i : Signal.t I.t) : (Signal.t O.t) =
-    Arp.Table.create scope i
+    Arp.Table.create ~name:"test" scope i
 
 end
 
@@ -81,7 +81,7 @@ let%expect_test "arp_table" =
 
   Sim.expect_trace_digest sim;
 
-  [%expect {| 250affc02703356227aadf450e33200d |}]
+  [%expect {| 3ea06238717eec02ce268de7779b1461 |}]
 
 module ArpSim = struct
   module Eth_flow = Flow.With_header(Common.EthernetHeader)
@@ -92,7 +92,7 @@ module ArpSim = struct
       ; clear : 'a
       ; rx : 'a Eth_flow.Src.t
       ; tx : 'a Eth_flow.Dst.t
-      ; query : 'a Arp.Table.ReadPort.I.t
+      ; query : 'a Arp.Table.ReadPort.Src.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
@@ -101,7 +101,7 @@ module ArpSim = struct
     type 'a t = 
       { rx : 'a Eth_flow.Dst.t 
       ; tx : 'a Eth_flow.Src.t
-      ; query : 'a Arp.Table.ReadPort.O.t
+      ; query : 'a Arp.Table.ReadPort.Dst.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end

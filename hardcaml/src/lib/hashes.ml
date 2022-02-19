@@ -59,13 +59,13 @@ let one_complement_sum (type a) (module B : Comb.S with type t = a) data =
 
   ~:(tree ~arity:2 ~f:(reduce ~f:(add1c16b (module B))) dwords)
 
-  let one_complement_sum_pipeline spec ~data ~enable =
-    let open Signal in
-  
-    let dwords = split_lsb ~exact:true ~part_width:16 data in
+let one_complement_sum_pipeline spec ~data ~enable =
+  let open Signal in
 
-    let pipeline_out = 
-      Hardcaml_circuits.Pipelined_tree_reduce.create ~f:(add1c16b (module Signal)) ~enable ~arity:2 spec dwords
-    in
-  
-    {With_valid.valid = pipeline_out.valid; value = ~:(pipeline_out.value)}
+  let dwords = split_lsb ~exact:true ~part_width:16 data in
+
+  let pipeline_out = 
+    Hardcaml_circuits.Pipelined_tree_reduce.create ~f:(add1c16b (module Signal)) ~enable ~arity:2 spec dwords
+  in
+
+  {With_valid.valid = pipeline_out.valid; value = ~:(pipeline_out.value)}

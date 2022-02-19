@@ -63,7 +63,7 @@ module VIP_map = struct
     let bus = BusAgent.create_wires () in
     let _, bus_o = BusAgent.if_of_t bus in
 
-    let write = WritePort.I.Of_always.reg spec in
+    let write = WritePort.Src.Of_always.reg spec in
   
     Always.(compile [
       write.valid <-- gnd;
@@ -79,7 +79,7 @@ module VIP_map = struct
       ]
     ]);
 
-    WritePort.I.Of_signal.assign (fst (WritePort.if_of_t write_port)) (WritePort.I.Of_always.value write);
+    WritePort.Src.Of_signal.assign (fst (WritePort.if_of_t write_port)) (WritePort.Src.Of_always.value write);
 
     bus_o.waitrequest <== gnd;
     bus_o.readdata <== zero 32;
@@ -136,8 +136,8 @@ end
 module RealLookupResp = Transaction.Make(RealLookupRespData)
 
 let real_lookup spec (req : RealLookupReq.t) =
-  let hash_ring_resp = HashRings.ReadPort.Response.create_wires () in
-  let hash_ring_req = Transaction.map (module RealLookupReq) (module HashRings.ReadPort.Request)
+  let hash_ring_resp = HashRings.ReadPort.Resp.create_wires () in
+  let hash_ring_req = Transaction.map (module RealLookupReq) (module HashRings.ReadPort.Req)
     req ~f:(fun req ->
       let open Signal in
       let hash = 
@@ -151,17 +151,17 @@ let real_lookup spec (req : RealLookupReq.t) =
   in
   let hash_ring_read = HashRings.ReadPort.create hash_ring_req hash_ring_resp in
 
-  let real_map_resp = RealsMap.ReadPort.Response.create_wires () in
-  let hash_ring_resp, real_map_req = Transaction.fork_map (module HashRings.ReadPort.Response) (module RealsMap.ReadPort.Request)
+  let real_map_resp = RealsMap.ReadPort.Resp.create_wires () in
+  let hash_ring_resp, real_map_req = Transaction.fork_map (module HashRings.ReadPort.Resp) (module RealsMap.ReadPort.Req)
     hash_ring_resp ~f:(fun resp ->
       { RealsMap.ReadPort.RequestData.address = resp.real_idx }
     )
   in
   let real_map_read = RealsMap.ReadPort.create real_map_req real_map_resp in
 
-  let hash_ring_resp = HashRings.ReadPort.Response.pipe_source spec hash_ring_resp in
+  let hash_ring_resp = HashRings.ReadPort.Resp.pipe_source spec hash_ring_resp in
 
-  let real_lookup_resp = Transaction.map2 (module RealsMap.ReadPort.Response) (module HashRings.ReadPort.Response) (module RealLookupResp)
+  let real_lookup_resp = Transaction.map2 (module RealsMap.ReadPort.Resp) (module HashRings.ReadPort.Resp) (module RealLookupResp)
     real_map_resp hash_ring_resp ~f:(fun real_resp hash_resp -> { RealLookupRespData.real_ip = real_resp.ip; real_idx = hash_resp.real_idx })
   in
 
@@ -183,8 +183,8 @@ let create
   let module L4Serializer = Flow.Serializer(L4_hdr_data) in
   let l4_hdr = L4Serializer.deserialize spec ip_rx.flow in
 
-  let vip_map_query_resp = VIP_map.ReadPort.Response.create_wires () in
-  let ip_hdr, vip_map_query_req = Transaction.fork_map (module IPv4_hdr) (module VIP_map.ReadPort.Request)
+  let vip_map_query_resp = VIP_map.ReadPort.Resp.create_wires () in
+  let ip_hdr, vip_map_query_req = Transaction.fork_map (module IPv4_hdr) (module VIP_map.ReadPort.Req)
     ip_rx.hdr ~f:(fun req -> { VIP_map.Key.vip = req.dst_ip }
   ) in
   let vip_map_query = VIP_map.ReadPort.create vip_map_query_req vip_map_query_resp in
@@ -213,7 +213,7 @@ let create
     )
   in
 
-  let vip_map_query_resp1, vip_map_query_resp2 = VIP_map.ReadPort.Response.fork vip_map_query_resp in
+  let vip_map_query_resp1, vip_map_query_resp2 = VIP_map.ReadPort.Resp.fork vip_map_query_resp in
 
   let module WithVip_mapFlow = Flow.With_header(VIP_map.ReadPort.ResponseData) in
   let encap_flow =
@@ -221,13 +221,13 @@ let create
     WithVip_mapFlow.filter spec ~f:(fun resp -> resp.found)
   in
 
-  VIP_map.ReadPort.Response.drop encap_flow.hdr;
+  VIP_map.ReadPort.Resp.drop encap_flow.hdr;
 
   let encap_flow = 
     Flow.Base.pipe_source spec encap_flow.flow |> Flow.Base.bufferize spec
   in
 
-  let pkt_info = Transaction.filter_map2 (module PacketInfoTst) (module VIP_map.ReadPort.Response) (module PacketInfoTst)
+  let pkt_info = Transaction.filter_map2 (module PacketInfoTst) (module VIP_map.ReadPort.Resp) (module PacketInfoTst)
     pkt_info vip_map_query_resp2 ~f:(fun pkt vip_resp ->
       {pkt with vip_idx = vip_resp.data.vip_idx}, vip_resp.found
     )

@@ -9,7 +9,7 @@ module type S = sig
       { valid : 'a
       ; data : 'a D.t
       }
-  [@@deriving sexp_of, hardcaml]
+    [@@deriving sexp_of, hardcaml]
   end
 
   module Dst : sig
@@ -40,7 +40,7 @@ module Make (Data : Interface.S) = struct
       { valid : 'a
       ; data : 'a D.t
       }
-  [@@deriving sexp_of, hardcaml]
+    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
 
   module Dst = struct
@@ -228,7 +228,7 @@ module Of_pair (FstData : Interface.S) (SndData : Interface.S) = struct
 
 end
 
-module Two_way (ReqData : Interface.S) (RespData : Interface.S) = struct
+module Req_resp (ReqData : Interface.S) (RespData : Interface.S) = struct
   module Req = Make(ReqData)
   module Resp = Make(RespData)
 

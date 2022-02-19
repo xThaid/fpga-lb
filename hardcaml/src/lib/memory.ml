@@ -19,43 +19,7 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
       [@@deriving sexp_of, hardcaml]
     end
 
-    module Request = Transaction.Make(RequestData)
-    module Response = Transaction.Make(Data)
-  
-    module I = struct
-      type 'a t =
-        { req : 'a Request.Src.t
-        ; resp : 'a Response.Dst.t
-        }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-    end
-  
-    module O = struct
-      type 'a t =
-        { req : 'a Request.Dst.t
-        ; resp : 'a Response.Src.t
-        }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-    end
-
-    type t = 
-      { req : Request.t
-      ; resp : Response.t
-      }
-
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
-      let req = Request.t_of_if i.req o.req in
-      let resp = Response.t_of_if o.resp i.resp in
-      {req; resp}
-
-    let if_of_t (t : t) = 
-      let i = {I.req = t.req.s; resp = t.resp.d} in
-      let o = {O.req = t.req.d; resp = t.resp.s} in
-      i, o
-
-    let create req resp = {req; resp}
-
-    let create_wires () = t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
+    include Transaction.Req_resp(RequestData)(Data)
   end
   
   module WritePort = struct
@@ -64,25 +28,10 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
         { address : 'a [@bits addr_width]
         ; data : 'a Data.t
         }
-      [@@deriving sexp_of, hardcaml]
+      [@@deriving sexp_of, hardcaml ~rtlmangle:true]
     end
 
-    module Request = Transaction.Make(Data)
-  
-    module I = Request.Src
-    module O = Request.Dst
-
-    type t = Request.t
-  
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
-      Request.t_of_if i o
-
-    let if_of_t (t : t) = 
-      Request.if_of_t t
-
-    let create_wires () =
-      Request.create_wires ()
-
+    include Transaction.Make(Data)
   end
 
   let data_entry_len = List.reduce_exn Data.Names_and_widths.port_widths ~f:(+)
@@ -91,35 +40,35 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
     type 'a t =
       { clock : 'a
       ; clear : 'a
-      ; read : 'a ReadPort.I.t 
-      ; write : 'a WritePort.I.t
+      ; read : 'a ReadPort.Src.t 
+      ; write : 'a WritePort.Src.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
   
   module O = struct
     type 'a t = 
-      { read : 'a ReadPort.O.t
-      ; write : 'a WritePort.O.t
+      { read : 'a ReadPort.Dst.t
+      ; write : 'a WritePort.Dst.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
 
-  let write_path (write_port : Signal.t WritePort.I.t) ram_write_port =
+  let write_path (write_port : Signal.t WritePort.Src.t) ram_write_port =
     let open Signal in
   
     ram_write_port.write_address <== write_port.data.address;
     ram_write_port.write_enable <== write_port.valid;
     ram_write_port.write_data <== Data.Of_signal.pack write_port.data.data;
 
-    let write_port_out = WritePort.O.Of_signal.wires () in
+    let write_port_out = WritePort.Dst.Of_signal.wires () in
     write_port_out.ready <== vdd;
     write_port_out
   
-  let read_path spec (read_port_i : Signal.t ReadPort.I.t) ram_read_port ram_read_data = 
+  let read_path spec (read_port_i : Signal.t ReadPort.Src.t) ram_read_port ram_read_data = 
     let open Signal in
     
-    let read_port_o = ReadPort.O.Of_signal.wires () in
+    let read_port_o = ReadPort.Dst.Of_signal.wires () in
 
     let resp_valid = Always.Variable.reg ~width:1 spec in
 
@@ -163,7 +112,7 @@ module Ram (Desc : RamDesc) (Data : Interface.S) = struct
   
     let ram =
       Hardcaml.Ram.create
-        ~name:(Scope.name scope "mem")
+        ~name:(Scope.name scope "ram")
         ~collision_mode:Read_before_write
         ~size:Desc.capacity
         ~write_ports:[|ram_write_port|]
@@ -245,47 +194,10 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
         { data : 'a Data.t
         ; found : 'a
         }
-      [@@deriving sexp_of, hardcaml]
+      [@@deriving sexp_of, hardcaml ~rtlmangle:true]
     end
-
-    module Request = Transaction.Make(Key)
-    module Response = Transaction.Make(ResponseData)
-  
-    module I = struct
-      type 'a t =
-        { req : 'a Request.Src.t
-        ; resp : 'a Response.Dst.t
-        }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-    end
-  
-    module O = struct
-      type 'a t =
-        { req : 'a Request.Dst.t
-        ; resp : 'a Response.Src.t
-        }
-    [@@deriving sexp_of, hardcaml ~rtlmangle:true]
-    end
-
-    type t = 
-      { req : Request.t
-      ; resp : Response.t
-      }
-  
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
-      let req = Request.t_of_if i.req o.req in
-      let resp = Response.t_of_if o.resp i.resp in
-      {req; resp}
-
-    let if_of_t (t : t) = 
-      let i = {I.req = t.req.s; resp = t.resp.d} in
-      let o = {O.req = t.req.d; resp = t.resp.s} in
-      i, o
-
-    let create req resp = {req; resp}
-
-    let create_wires () =
-      t_of_if (I.Of_signal.wires ()) (O.Of_signal.wires ())
+    
+    include Transaction.Req_resp(Key)(ResponseData)
   end
   
   module WritePort = struct
@@ -294,41 +206,26 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
         { key : 'a Key.t
         ; data : 'a Data.t
         }
-      [@@deriving sexp_of, hardcaml]
+      [@@deriving sexp_of, hardcaml ~rtlmangle:true]
     end
 
-    module Request = Transaction.Make(Data)
-  
-    module I = Request.Src
-    module O = Request.Dst
-
-    type t = Request.t
-  
-    let t_of_if (i : Signal.t I.t) (o : Signal.t O.t) =
-      Request.t_of_if i o
-
-    let if_of_t (t : t) = 
-      Request.if_of_t t
-
-    let create_wires () =
-      Request.create_wires ()
-
+    include Transaction.Make(Data)
   end
   
   module I = struct
     type 'a t =
       { clock : 'a
       ; clear : 'a
-      ; query : 'a ReadPort.I.t 
-      ; write : 'a WritePort.I.t
+      ; query : 'a ReadPort.Src.t 
+      ; write : 'a WritePort.Src.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
   
   module O = struct
     type 'a t = 
-      { query : 'a ReadPort.O.t
-      ; write : 'a WritePort.O.t
+      { query : 'a ReadPort.Dst.t
+      ; write : 'a WritePort.Dst.t
       }
     [@@deriving sexp_of, hardcaml ~rtlmangle:true]
   end
@@ -340,8 +237,6 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
       ; data : 'a Data.t
       }
     [@@deriving sexp_of, hardcaml]
-  
-    let len = List.fold Names_and_widths.port_widths ~init:0 ~f:(+)
   end
 
   module Mem = Ram(Desc)(Entry)
@@ -353,14 +248,14 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
     split_msb ~exact:true ~part_width:32 |>
     List.fold ~init:(ones 32) ~f:(Hashes.crc32 (module Signal))
   
-  let write_path scope spec (write_port_in : Signal.t WritePort.I.t) mem_write_port =
+  let write_path scope spec (write_port_in : Signal.t WritePort.Src.t) mem_write_port =
     let open Signal in
     let (--) = Scope.naming scope in
   
-    let write_port_out = WritePort.O.Of_signal.wires () in
+    let write_port_out = WritePort.Dst.Of_signal.wires () in
     let write_port = WritePort.t_of_if write_port_in write_port_out in
 
-    Transaction.map (module WritePort.Request) (module Mem.WritePort.Request)
+    Transaction.map (module WritePort) (module Mem.WritePort)
       write_port ~f:(fun data ->
         let hash = calc_hash data.key -- "write_hash" in
         let addr = sel_bottom hash Mem.addr_width in
@@ -374,46 +269,46 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
 
         { Mem.WritePort.Data.address = addr; data = entry }
       ) |>
-    Mem.WritePort.Request.pipe_source spec |>
-    Mem.WritePort.Request.connect mem_write_port;
+    Mem.WritePort.pipe_source spec |>
+    Mem.WritePort.connect mem_write_port;
 
     write_port_out
   
-  let read_path scope spec (read_port_in : Signal.t ReadPort.I.t) (mem_read_port : Mem.ReadPort.t) = 
+  let read_path scope spec (read_port_in : Signal.t ReadPort.Src.t) (mem_read_port : Mem.ReadPort.t) = 
     let open Signal in
     let (--) = Scope.naming scope in
 
-    let read_port_out = ReadPort.O.Of_signal.wires () in
+    let read_port_out = ReadPort.Dst.Of_signal.wires () in
     let read_port = ReadPort.t_of_if read_port_in read_port_out in
 
-    let req, req_cpy = ReadPort.Request.fork read_port.req in
-    let req_cpy = ReadPort.Request.pipe_source spec req_cpy |> ReadPort.Request.pipe_source spec in
+    let req, req_cpy = ReadPort.Req.fork read_port.req in
+    let req_cpy = ReadPort.Req.pipe_source spec req_cpy |> ReadPort.Req.pipe_source spec in
 
-    Transaction.map (module ReadPort.Request) (module Mem.ReadPort.Request)
+    Transaction.map (module ReadPort.Req) (module Mem.ReadPort.Req)
       req ~f:(fun key ->
         let hash = calc_hash key -- "read_hash" in
         { Mem.ReadPort.RequestData.address = sel_bottom hash Mem.addr_width}
       ) |>
-    Mem.ReadPort.Request.pipe_source spec |>
-    Mem.ReadPort.Request.connect mem_read_port.req;
+    Mem.ReadPort.Req.bufferize spec |>
+    Mem.ReadPort.Req.connect mem_read_port.req;
 
-    Transaction.map2 (module ReadPort.Request) (module Mem.ReadPort.Response) (module ReadPort.Response)
+    Transaction.map2 (module ReadPort.Req) (module Mem.ReadPort.Resp) (module ReadPort.Resp)
       req_cpy mem_read_port.resp ~f:(fun req resp ->
         { ReadPort.ResponseData.found = resp.valid &: (Key.Of_signal.pack resp.key ==: Key.Of_signal.pack req)
         ; data = resp.data
         }
       ) |>
-    ReadPort.Response.connect read_port.resp;
+    ReadPort.Resp.connect read_port.resp;
   
     read_port_out
   
-  let create (scope : Scope.t) (input : Signal.t I.t) =
+  let create ~name (scope : Scope.t) (input : Signal.t I.t) =
     let spec = Reg_spec.create ~clock:input.clock ~clear:input.clear () in
     
     let mem_read_port = Mem.ReadPort.create_wires () in
     let mem_write_port = Mem.WritePort.create_wires () in
 
-    Mem.hierarchical ~name:"mem" scope spec ~read_port:mem_read_port ~write_port:mem_write_port;
+    Mem.hierarchical ~name:(name ^ "_ram") scope spec ~read_port:mem_read_port ~write_port:mem_write_port;
   
     let write_port_out = write_path scope spec input.write mem_write_port in 
     let read_port_out = read_path scope spec input.query mem_read_port in
@@ -437,7 +332,8 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
     let i = {I.clock; clear; query = rp_i; write = wp_i} in
     let o = {O.query = rp_o; write = wp_o} in
   
-    let o2 = H.hierarchical ~scope ~name:(name ^ "_hashtbl") create i in
+    let name = (name ^ "_hashtbl") in
+    let o2 = H.hierarchical ~scope ~name (create ~name) i in
     O.Of_signal.assign o o2;
 
 end
