@@ -1,4 +1,4 @@
-VERILOG_TOP = bin/dataplane.v
+VERILOG_TOP = out/dataplane.v
 
 default: gen
 
@@ -8,7 +8,7 @@ tap: build
 	sudo ip netns exec fpga_lb _build/default/test/tap/main.exe
 
 $(VERILOG_TOP): build
-	@mkdir -p bin 
+	@mkdir -p out 
 	_build/default/main.exe
 
 build:
@@ -21,6 +21,6 @@ clean:
 	rm -rf _build
 
 distclean: clean
-	rm -rf bin
+	rm -rf out
 
 .PHONY: default gen build test distclean clean gen tap

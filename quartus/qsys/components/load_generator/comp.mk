@@ -1,3 +1,3 @@
 HWCOMP-TOPLEVEL := load_generator
 
-HWCOMP-SOURCES += hardcaml/bin/load_generator.v
+HWCOMP-SOURCES += hardcaml/out/load_generator.v
