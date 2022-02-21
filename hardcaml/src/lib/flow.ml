@@ -217,7 +217,7 @@ module Base = struct
 
     Src.Of_signal.assign sink.s (Src.Of_always.value sink_src);
     
-    bufferize ~ready_ahead:true spec sink
+    pipe ~ready_ahead:true spec sink
 
   (* Source must have read latency 0. Sink 1 have ready latency 1. *)
   let split spec ~hdr_length ~(source : t) =
@@ -292,7 +292,7 @@ module Base = struct
     sink2.s.data.empty <== shifted_source.data.empty;
     sink2.s.valid <== sink2_valid.value;
 
-    sink1, bufferize ~ready_ahead:true spec sink2 (* TODO: this is probably broken *)
+    sink1, pipe ~ready_ahead:true spec sink2 (* TODO: this is probably broken *)
 end
 
 module Serializer (Data : Interface.S) = struct
@@ -510,8 +510,8 @@ module With_header (Data : Interface.S) = struct
     Src.Of_signal.assign i1 i2;
     Dst.Of_signal.assign o2 o1
 
-  let bufferize spec t = 
-    create (Header.bufferize spec t.hdr) (Base.bufferize spec t.flow)
+  let pipe spec t = 
+    create (Header.pipe spec t.hdr) (Base.pipe spec t.flow)
 
   let gate t ~enable = 
     create (Header.gate t.hdr ~enable) (Base.gate t.flow ~enable)
@@ -529,7 +529,7 @@ module With_header (Data : Interface.S) = struct
     create (Header.pipe_source spec t.hdr) (Base.pipe_source spec t.flow)
 
   let map_hdr t ~f =
-    create (Header.map_comb t.hdr ~f) t.flow
+    create (Header.map t.hdr ~f) t.flow
 
   module FlowStatus = struct
     type t =
@@ -688,7 +688,7 @@ module With_header (Data : Interface.S) = struct
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
     let f1 = Serializer.serialize spec flow.hdr in
-    Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow |> Base.bufferize spec
+    Base.join spec ~hdr_length:Header.data_len ~source1:f1 ~source2:flow.flow |> Base.pipe spec
 
   let arbitrate spec sources =
     let open Signal in
@@ -711,7 +711,7 @@ module With_header (Data : Interface.S) = struct
       Dst.Of_signal.assign source_dst (Dst.Of_signal.mux2 sel dst (Dst.map Dst.port_widths ~f:zero))
     );
 
-    bufferize spec (t_of_if src dst)
+    pipe spec (t_of_if src dst)
 
   let dispatch spec source ~selector = 
     let open Signal in

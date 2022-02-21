@@ -112,7 +112,7 @@ let load_generator spec (config : Signal.t Config.Data.t) =
 
   let timer_tick = 
     Timer.create 32 spec ~enable:config.flags.enabled ~top:config.tx_period |>
-    Timer.Tick.bufferize spec
+    Timer.Tick.pipe spec
   in
 
   let tick_to_ip, tick_to_udp = Timer.Tick.fork timer_tick in 
@@ -152,7 +152,7 @@ let load_generator spec (config : Signal.t Config.Data.t) =
       ; dst_ip = config.dst_ip
       }
       ) |>
-    Ip_hdr.bufferize spec
+    Ip_hdr.pipe spec
   in
 
   IPv4_flow.create ip_hdr udp_flow
@@ -167,7 +167,7 @@ let create
   let rx_eth_arp = 
     Eth_flow.from_flow spec rx |>
     Eth_flow.filter spec ~f:(fun eth -> Signal.(eth.ether_type ==:. 0x0806)) |>
-    Eth_flow.bufferize spec
+    Eth_flow.pipe spec
   in
 
   let config, config_bus = Config.create spec in

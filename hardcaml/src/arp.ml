@@ -68,10 +68,10 @@ end
 let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) ~(on_arp_req : OnArpRequest.t) = 
   let module Serializer = Flow.Serializer(Common.ArpPacket) in
 
-  let tst_in = EthArpTst.join_comb rx.hdr (Serializer.deserialize spec rx.flow) in
+  let tst_in = EthArpTst.join rx.hdr (Serializer.deserialize spec rx.flow) in
 
   let arp_in_req, arp_in_resp = 
-    EthArpTst.demux2_on tst_in ~f:(fun pkt -> Signal.(pkt.snd.oper ==:. 1))
+    EthArpTst.demux2 tst_in ~f:(fun pkt -> Signal.(pkt.snd.oper ==:. 1))
   in
 
   EthArpTst.apply arp_in_resp ~f:(fun ~valid ~data ->
@@ -113,8 +113,8 @@ let datapath spec ~(rx : Eth_flow.t) (table_write_port : Table.WritePort.t) ~(on
     )
   in
 
-  let eth_out, arp_out = EthArpTst.split_comb pkt_out in
-  Eth_flow.create (EthTst.bufferize spec eth_out) (Serializer.serialize spec arp_out)
+  let eth_out, arp_out = EthArpTst.split pkt_out in
+  Eth_flow.create (EthTst.pipe spec eth_out) (Serializer.serialize spec arp_out)
 
 let create
       (scope : Scope.t)

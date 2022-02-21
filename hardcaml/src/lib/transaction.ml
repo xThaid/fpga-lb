@@ -82,9 +82,13 @@ module Make (Data : Interface.S) = struct
   let valid t = t.s.valid
   let data t = t.s.data
 
-  let map_comb t ~f =
-    t_of_if {Src.valid = t.s.valid; data = f t.s.data} t.d
-  let filter_comb t ~f =
+  let map t ~f =
+    let open Signal in
+    let tst = create ~valid:t.s.valid ~data:(f t.s.data) in
+    t.d.ready <== tst.d.ready;
+    tst
+
+  let filter t ~f =
     let open Signal in
     let filtered = f t.s.data in
     let new_tst = create ~valid:(t.s.valid &: filtered) ~data:t.s.data in
@@ -131,39 +135,14 @@ module Make (Data : Interface.S) = struct
 
     tsts
 
-  let demux2_on tst ~f =
+  let demux2 tst ~f =
     let tsts = demux 2 tst ~f in
     List.nth_exn tsts 1, List.nth_exn tsts 0
 
-  let apply tst ~(f : (valid:Signal.t -> data:Signal.t D.t -> Signal.t)) =
+  let apply tst ~f =
     Signal.(tst.d.ready <== (f ~valid:tst.s.valid ~data:tst.s.data))
 
-  let bufferize spec ?(ready_ahead = false) tst_in =
-    let open Signal in
-  
-    let module Buffer = Fifos.Buffer(Data) in
-  
-    let tst_out = create_wires () in 
-  
-    let buffer_in = Buffer.I.Of_signal.wires () in
-    buffer_in.wr_enable <== tst_in.s.valid;
-    buffer_in.rd_enable <== tst_out.d.ready;
-    Data.Of_signal.assign buffer_in.wr_data tst_in.s.data;
-  
-    let buffer_out = Buffer.create spec buffer_in in
-    tst_in.d.ready <== (if ready_ahead then buffer_out.ready_next else buffer_out.ready);
-    tst_out.s.valid <== buffer_out.rd_valid;
-    Data.Of_signal.assign tst_out.s.data buffer_out.rd_data;
-  
-    tst_out
-
-  let bufferized_gate spec ?(enable_in=Signal.vdd) ?(enable_out=Signal.vdd) t= 
-    let open Signal in
-    let tst = create ~valid:(t.s.valid &: (reg spec enable_in)) ~data:t.s.data in
-    t.d.ready <== reg spec (tst.d.ready &: enable_in);
-    let tst = bufferize spec ~ready_ahead:true tst in
-    gate tst ~enable:(reg spec enable_out)
-
+  (* Returns a transaction drived by the input transaction with valid & data paths cut by registers. *)
   let pipe_source spec tst_in = 
     let open Signal in
 
@@ -171,6 +150,69 @@ module Make (Data : Interface.S) = struct
     Src.Of_signal.assign tst_out.s (Src.Of_signal.reg ~enable:tst_in.d.ready spec tst_in.s); 
     tst_in.d.ready <== (tst_out.d.ready |: ~:(tst_out.s.valid));
     tst_out
+
+  (* Returns a transaction drived by the input transaction with ready path cut by registers. *)
+  let pipe_dest spec ?(ready_ahead = false) tst_in = 
+    let open Signal in
+
+    let tst_out = create_wires () in
+
+    let buffer = Src.Of_always.reg spec in
+
+    let out = Src.Of_always.wire zero in
+
+    let store_in_to_out = Always.Variable.wire ~default:gnd in
+    let store_in_to_buff = Always.Variable.wire ~default:gnd in
+    let store_buff_to_out = Always.Variable.wire ~default:gnd in
+
+    let in_ready_next = (ready tst_out) |: (~:(buffer.valid.value) &: ~:(tst_in.s.valid)) in
+    let in_ready = reg spec in_ready_next in 
+
+    Always.(compile [
+      if_ in_ready [
+        (* Input is ready *)
+        if_ (tst_out.d.ready) [
+          (* Output is ready or currently not valid, transfer data to output *)
+          store_in_to_out <--. 1
+        ] [
+          (* Output is not ready, store input in buffer *)
+          buffer.valid <-- tst_in.s.valid;
+          store_in_to_buff <--. 1
+        ]
+      ] @@ elif tst_out.d.ready [
+        (* Input is not ready, but output is ready *)
+        buffer.valid <--. 0;
+        store_buff_to_out <--. 1
+      ] [];
+
+      if_ store_in_to_out.value [
+        Src.Of_always.assign out tst_in.s
+      ] @@ elif store_in_to_buff.value [
+        Src.Of_always.assign buffer tst_in.s;
+      ] [];
+
+      when_ store_buff_to_out.value [
+        Src.Of_always.assign out (Src.Of_always.value buffer)
+      ]
+    ]);
+
+    tst_in.d.ready <== (if ready_ahead then in_ready_next else in_ready);
+    Src.Of_signal.assign tst_out.s (Src.Of_always.value out);
+
+    tst_out
+
+  (* Returns a transaction connected through pipe_dest and pipe_source with the input transaction. 
+     It implies that there are no combinatorial path between input and output transaction *)
+  let pipe spec ?(ready_ahead = false) tst_in = 
+    pipe_dest spec ~ready_ahead tst_in |>
+    pipe_source spec
+
+  let bufferized_gate spec ?(enable_in = Signal.vdd) ?(enable_out = Signal.vdd) t = 
+    let open Signal in
+    let tst = create ~valid:(t.s.valid &: (reg spec enable_in)) ~data:t.s.data in
+    t.d.ready <== reg spec (tst.d.ready &: enable_in);
+    let tst = pipe spec ~ready_ahead:true tst in
+    gate tst ~enable:(reg spec enable_out)
 
 end
 
@@ -190,7 +232,7 @@ module Of_pair (FstData : Interface.S) (SndData : Interface.S) = struct
 
   include Make(Data)
   
-  let join_comb (fst : Fst.t) (snd : Snd.t) =
+  let join (fst : Fst.t) (snd : Snd.t) =
     let open Signal in
 
     let res = create ~valid:((Fst.valid fst) &: (Snd.valid snd)) ~data:{Data.fst = (Fst.data fst); snd = (Snd.data snd)} in
@@ -200,7 +242,7 @@ module Of_pair (FstData : Interface.S) (SndData : Interface.S) = struct
 
     res
 
-  let split_comb (tst : t) =
+  let split (tst : t) =
     let open Signal in
 
     let fst = Fst.create_wires () in
@@ -217,12 +259,12 @@ module Of_pair (FstData : Interface.S) (SndData : Interface.S) = struct
     fst, snd
 
   let fst tst =
-    let t1, t2 = split_comb tst in
+    let t1, t2 = split tst in
     Signal.assign (Snd.ready t2) Signal.vdd;
     t1
 
   let snd tst =
-    let t1, t2 = split_comb tst in
+    let t1, t2 = split tst in
     Signal.assign (Fst.ready t1) Signal.vdd;
     t2
 

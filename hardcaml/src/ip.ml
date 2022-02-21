@@ -68,7 +68,7 @@ let pipline_checksum_calculation spec (ipv4_hdr : IPv4_hdr.t) =
   
   Transaction.map2 (module IPv4_hdr) (module ChecksumTst) (module IPv4_hdr) ipv4_hdr_cpy (ChecksumTst.pipe_source spec checksum_out)
     ~f:(fun hdr chksum -> {hdr with hdr_checksum = chksum.checksum}) |>
-  IPv4_hdr.bufferize spec
+  IPv4_hdr.pipe spec
 
 let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) ~(cfg : Signal.t Config.t) =
   let open Signal in
@@ -81,11 +81,11 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) ~(cfg
   let ip_flow = 
     Flow.Base.pipe_source spec ip_rx.flow |>
     Flow.Base.pipe_source spec |>
-    Flow.Base.bufferize spec
+    Flow.Base.pipe spec
   in
 
   let ip_hdr = 
-    IPv4_hdr.map_comb ip_hdr ~f:(fun data -> { data with hdr_checksum = zero 16}) |>
+    IPv4_hdr.map ip_hdr ~f:(fun data -> { data with hdr_checksum = zero 16}) |>
     pipline_checksum_calculation spec
   in
 
@@ -93,7 +93,7 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) ~(cfg
   let module WithArpRespFlow = Flow.With_header(WithArpResp.Data) in
 
   let flow_with_arp_resp = 
-    WithArpRespFlow.create (WithArpResp.join_comb arp_query.resp ip_hdr) ip_flow |> 
+    WithArpRespFlow.create (WithArpResp.join arp_query.resp ip_hdr) ip_flow |> 
     WithArpRespFlow.filter spec ~f:(fun hdr -> hdr.fst.found)
   in
 
@@ -109,7 +109,7 @@ let egress spec ~(ip_rx : IPv4_flow.t) ~(arp_query : Arp.Table.ReadPort.t) ~(cfg
   let ip_tx = IPv4_flow.create (WithArpResp.snd with_arp_resp) flow_with_arp_resp.flow in
 
   let flow_out = IPv4_flow.to_flow spec ip_tx in
-  Eth_flow.create (Eth_hdr.bufferize spec eth_hdr) flow_out
+  Eth_flow.create (Eth_hdr.pipe spec eth_hdr) flow_out
 
 let create
       (_scope : Scope.t)

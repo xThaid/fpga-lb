@@ -289,7 +289,7 @@ module Hashtbl (Desc : RamDesc) (Key : Interface.S) (Data : Interface.S) = struc
         let hash = calc_hash key -- "read_hash" in
         { Mem.ReadPort.RequestData.address = sel_bottom hash Mem.addr_width}
       ) |>
-    Mem.ReadPort.Req.bufferize spec |>
+    Mem.ReadPort.Req.pipe spec |>
     Mem.ReadPort.Req.connect mem_read_port.req;
 
     Transaction.map2 (module ReadPort.Req) (module Mem.ReadPort.Resp) (module ReadPort.Resp)

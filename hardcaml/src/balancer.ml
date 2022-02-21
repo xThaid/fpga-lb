@@ -203,7 +203,7 @@ let create
   let module PacketInfoTst = Transaction.Make(PacketInfo) in
 
   let pkt_info = Transaction.map2 (module IPv4_hdr) (module L4_hdr) (module PacketInfoTst)
-    (IPv4_hdr.bufferize spec ip_hdr) l4_hdr ~f:(fun ip l4 ->
+    (IPv4_hdr.pipe spec ip_hdr) l4_hdr ~f:(fun ip l4 ->
       { PacketInfo.vip_idx = Signal.zero PacketInfo.port_widths.vip_idx
       ; src_ip = ip.src_ip
       ; src_port = l4.src_port
@@ -224,7 +224,7 @@ let create
   VIP_map.ReadPort.Resp.drop encap_flow.hdr;
 
   let encap_flow = 
-    Flow.Base.pipe_source spec encap_flow.flow |> Flow.Base.bufferize spec
+    Flow.Base.pipe_source spec encap_flow.flow |> Flow.Base.pipe spec
   in
 
   let pkt_info = Transaction.filter_map2 (module PacketInfoTst) (module VIP_map.ReadPort.Resp) (module PacketInfoTst)
@@ -243,7 +243,7 @@ let create
     )
   in
 
-  let pkt_info = PacketInfoTst.bufferize spec pkt_info in
+  let pkt_info = PacketInfoTst.pipe spec pkt_info in
 
   let real_lookup_resp, hash_ring_read, reals_map_read = real_lookup spec real_lookup_req in
 
@@ -267,13 +267,13 @@ let create
       ; dst_ip = resp.real_ip
       }
     ) |>
-    IPv4_hdr.bufferize spec
+    IPv4_hdr.pipe spec
   in
 
   let outer_ip_hdr, outer_ip_hdr_for_stats = IPv4_hdr.fork outer_ip_hdr in
 
   let module IP_Real_Pair = Transaction.Of_pair(Common.IPv4Header)(RealLookupRespData) in
-  let ip_with_real = IP_Real_Pair.join_comb outer_ip_hdr_for_stats (RealLookupResp.pipe_source spec real_lookup_resp_for_stats) in
+  let ip_with_real = IP_Real_Pair.join outer_ip_hdr_for_stats (RealLookupResp.pipe_source spec real_lookup_resp_for_stats) in
   let ip_hdrs_by_real = IP_Real_Pair.demux Consts.max_reals ip_with_real ~f:(fun data -> data.snd.real_idx) in
 
   let outer_ip_hdr, outer_ip_hdr_for_stats = IPv4_hdr.fork outer_ip_hdr in

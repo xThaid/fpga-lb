@@ -521,7 +521,7 @@ module PacketizerFullSim (HeaderData : Interface.S) = struct
     let f1, f2 = Flow.Base.split spec ~hdr_length:Header.data_len ~source in
     let tst = Serializer.deserialize spec f1 in
 
-    let hdr_transf = Header.map_comb tst ~f:(fun _ ->
+    let hdr_transf = Header.map tst ~f:(fun _ ->
       HeaderData.Of_signal.unpack ~rev:true (Signal.of_hex ~width:Header.data_len "b0b1b2b3b4b5b6b7b8b9babb")
     ) in
 

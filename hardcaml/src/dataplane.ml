@@ -80,7 +80,7 @@ let create
 
     concat_msb [sel_ip; sel_arp]
   ) in
-  let eth_flows = Base.List.map eth_flows ~f:(Eth_flow.bufferize spec) in
+  let eth_flows = Base.List.map eth_flows ~f:(Eth_flow.pipe spec) in
 
   let rx_eth_arp = Base.List.nth_exn eth_flows 0 in
   let rx_eth_ip = Base.List.nth_exn eth_flows 1 in
