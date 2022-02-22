@@ -370,7 +370,7 @@ module WithHeaderSim (Data : Interface.S) = struct
 
     let source = Flow.Base.t_of_if i.source_tx (Flow.Base.Dst.Of_signal.wires ()) in
     let tst_in = Transaction.t_of_if i.tst_in (Transaction.Dst.Of_signal.wires ()) in
-    let combined = fst (With_flow.barrier spec (With_flow.create tst_in source)) in
+    let combined = fst (With_flow.weak_barrier spec (With_flow.create tst_in source)) in
 
     Transaction.Dst.Of_signal.assign (Transaction.outputs combined.hdr) i.tst_out;
     Flow.Base.Dst.Of_signal.assign combined.flow.d i.sink_tx;

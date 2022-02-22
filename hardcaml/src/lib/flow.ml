@@ -22,6 +22,8 @@ module AvalonST = struct
   end
 end
 
+(* A representation of data stream. In fact, it is just a transaction with extra signals 
+   denoting the state of a stream. *)
 module Base = struct
   module TstData = struct
     type 'a t =
@@ -134,7 +136,9 @@ module Base = struct
 
     shifted, shifted_ready_next.value
 
-  (* Sources must have read latency equal to 0. Sink has ready latency 1 *)
+  (* Joins two flows into one by taking `hdr_length` bits from the first one
+     and everything from the second one. Sources must have read latency equal
+     to 0. Sink has ready latency 1. *)
   let join spec ~hdr_length ~(source1 : t) ~(source2 : t) =
     let open Signal in
 
@@ -219,7 +223,9 @@ module Base = struct
     
     pipe ~ready_ahead:true spec sink
 
-  (* Source must have read latency 0. Sink 1 have ready latency 1. *)
+  (* Splits a flow by forwarding `hdr_length` bits into the first flow and the
+     remainder into the second one. Source must have read latency 0. Sink 1 have
+     ready latency 1. *)
   let split spec ~hdr_length ~(source : t) =
     let open Signal in
 
@@ -292,12 +298,13 @@ module Base = struct
     sink2.s.data.empty <== shifted_source.data.empty;
     sink2.s.valid <== sink2_valid.value;
 
-    sink1, pipe ~ready_ahead:true spec sink2 (* TODO: this is probably broken *)
+    sink1, pipe ~ready_ahead:true spec sink2
 end
 
 module Serializer (Data : Interface.S) = struct
   module Tst = Transaction.Make(Data)
 
+  (* Serializes a data (wrapped in transaction) to a flow. *)
   let serialize spec (tst : Tst.t) =
     let open Signal in
 
@@ -362,6 +369,7 @@ module Serializer (Data : Interface.S) = struct
 
     Base.t_of_if flow_src flow_dst
 
+  (* Deserializes a data from a flow. *)
   let deserialize spec ?(ready_ahead = false) (flow : Base.t) =
     let open Signal in
 
@@ -460,6 +468,7 @@ module Serializer (Data : Interface.S) = struct
 
 end
 
+(* Representation of a flow combined with a header. *)
 module With_header (Data : Interface.S) = struct
   module Header = Transaction.Make(Data)
 
@@ -531,14 +540,15 @@ module With_header (Data : Interface.S) = struct
   let map_hdr t ~f =
     create (Header.map t.hdr ~f) t.flow
 
-  module FlowStatus = struct
+  module WeakBarrierStatus = struct
     type t =
       { valid : Signal.t
       ; last_fired : Signal.t
       }
   end
 
-  let barrier spec (flow : t) =
+  (* Synchronizes header and flow together by letting through exactly one header and one flow at a time. *)
+  let weak_barrier spec (flow : t) =
     let open Signal in
 
     let hdr_enabled_next = Always.Variable.wire ~default:gnd in
@@ -609,7 +619,7 @@ module With_header (Data : Interface.S) = struct
 
     ]);
     
-    {hdr = hdr_out; flow = flow_out}, {FlowStatus.valid = Base.valid flow_out |: Header.valid hdr_out; last_fired = last.value}
+    {hdr = hdr_out; flow = flow_out}, {WeakBarrierStatus.valid = Base.valid flow_out |: Header.valid hdr_out; last_fired = last.value}
 
   module HeaderBarrierStatus = struct
     type t =
@@ -618,6 +628,7 @@ module With_header (Data : Interface.S) = struct
       }
   end
 
+  (* More strict barrier, in which the header must be sent firstly and then the flow is passed through. *)
   let header_barrier spec flow =
     let open Signal in
 
@@ -679,12 +690,16 @@ module With_header (Data : Interface.S) = struct
 
     create hdr_out flow_out, status
 
+  (* Takes a plain flow, deserializes its prefix to a header and the remainder
+     flow is returned along with the header. *)
   let from_flow spec (flow : Base.t) =
     let module Serializer = Serializer(Data) in
     let f1, f2 = Base.split spec ~hdr_length:Header.data_len ~source:flow in
     let hdr = Serializer.deserialize spec ~ready_ahead:true f1 in
     create hdr f2
 
+  (* Takes a flow with a header, deserializes the header into a flow and then both flows are 
+     concated and returned. *)
   let to_flow spec (flow : t) =
     let module Serializer = Serializer(Data) in
     let f1 = Serializer.serialize spec flow.hdr in
@@ -693,7 +708,7 @@ module With_header (Data : Interface.S) = struct
   let arbitrate spec sources =
     let open Signal in
 
-    let synchronized = List.map sources ~f:(barrier spec) in
+    let synchronized = List.map sources ~f:(weak_barrier spec) in
     let request, acknowledge = List.map synchronized ~f:(fun (_, s) -> s.valid, s.last_fired) |> List.unzip in
 
     let granted_onehot = Arbiter.round_robin spec ~request ~acknowledge in
@@ -713,10 +728,13 @@ module With_header (Data : Interface.S) = struct
 
     pipe spec (t_of_if src dst)
 
+  (* Dispatches a single (header, flow) into multiple flows based on the result
+     of the selector, which is a function that takes header's data and returns
+     onehot signal denoting to which sink the data must be forwarded. *)
   let dispatch spec source ~selector = 
     let open Signal in
 
-    let synchronized, status = barrier spec source in
+    let synchronized, status = header_barrier spec source in
     let selector_onehot = selector (Header.data synchronized.hdr) in
 
     let source_src, source_dst = if_of_t synchronized in
@@ -731,11 +749,11 @@ module With_header (Data : Interface.S) = struct
     Always.(compile [
       if_ busy.value [
         sel_onehot <-- sel_reg_onehot.value;
-        when_ status.last_fired [
+        when_ status.flow_end [
           busy <--. 0;
         ]
       ] [
-        when_ status.valid [
+        when_ status.hdr_valid [
           sel_onehot <-- selector_onehot;
           sel_reg_onehot <-- selector_onehot;
           busy <--. 1;
@@ -762,39 +780,10 @@ module With_header (Data : Interface.S) = struct
 
     sinks
 
+  (* Filters (header, flow) based on the header data. *)
   let filter spec source ~f = 
-    let open Signal in
-
-    let synchronized, status = header_barrier spec source in
-    let filtered = f (Header.data synchronized.hdr) in
-
-    let source_src, source_dst = if_of_t synchronized in
-
-    let busy = Always.Variable.reg ~width:1 spec in
-    let forward = Always.Variable.wire ~default:gnd in
-    let forward_reg = Always.Variable.reg ~width:1 spec in
-
-    Always.(compile [
-      if_ busy.value [
-        forward <-- forward_reg.value;
-        when_ status.flow_end [
-          busy <--. 0;
-        ]
-      ] [
-        when_ status.hdr_valid [
-          forward <-- filtered;
-          forward_reg <-- filtered;
-          busy <--. 1;
-        ]
-      ]
-    ]);
-
-    let sink = create_wires () in
-    let sink_s, sink_d = if_of_t sink in
-    
-    Src.Of_signal.assign sink_s source_src;
-    Dst.Of_signal.assign source_dst (Dst.Of_signal.mux2 forward.value sink_d (Dst.map Dst.port_widths ~f:ones));
-
-    gate sink ~enable:forward.value
+    let sinks = dispatch spec source ~selector:f in
+    if List.length sinks <> 1 then raise_s [%message "filter should return a signal of length 1"];
+    List.nth_exn sinks 0
 
 end

@@ -1,6 +1,11 @@
 open Base
 open Hardcaml
 
+(* Transaction is an abstraction for passing through data. Except the data
+   that is being sent, there are two extra signals - valid and ready.
+   Valid is set by the sender and ready signal is set by the receiver.
+   The data is assumed to be sent iff both signals are high. *)
+
 module type S = sig
   module D : Interface.S
 
