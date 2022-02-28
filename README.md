@@ -1,5 +1,5 @@
 # FPGA Load Balancer
-This us a network layer 4 load balancer written on FPGA. The purpose of this project was to create a proof of concept rather than a fully-featured product. Therefore, this documentation is not purely technical, but it also contains my thoughts and reflections on the whole project, as I think they might be (hopefully) educational. The project was created as part of the FPGA Programming course that I have taken at my university.
+This is a network layer 4 load balancer written on FPGA. The purpose of this project was to create a proof of concept rather than a fully-featured product. Therefore, this documentation is not purely technical, but it also contains my thoughts and reflections on the whole project, as I think they might be (hopefully) educational. The project was created as part of the FPGA Programming course that I have taken at my university.
 
 #### Specs
 * Hardware part is mostly written in [Hardcaml](https://github.com/janestreet/hardcaml) (a domain-specific language based on OCaml).
